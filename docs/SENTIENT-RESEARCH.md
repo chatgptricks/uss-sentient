@@ -2,7 +2,7 @@
 
 Local sources reviewed on October 4, 2026. These files document seven **functional zones**, not a formal HR department chart. The game preserves their names and primarily follows the internal Hub functions.
 
-The current deliverable is a navigable, ISS-inspired layout blockout for approval: enclosed off-white modules, an asymmetric floor plan and a star visible through windows. Room proportions and circulation are the focus. A detailed asset pass follows layout approval.
+The current deliverable is a detailed, navigable ISS-inspired station developed from the user-approved layout: enclosed off-white modules, asymmetric circulation, four deck heights and a neon star visible through framed windows. Imported equipment, physical controls and department-specific instruments enrich the approved pressure-hull structure.
 
 ## Room mapping
 
@@ -47,7 +47,7 @@ Room content is implemented in `src/rooms.js`. The original company projects wer
 
 ## Spacecraft layout references
 
-The user selected the ISS as the primary spatial reference, with the enclosed spacecraft feel of *Ender's Game* as a secondary direction. NASA's [Destiny module](https://www.nasa.gov/international-space-station/destiny-laboratory-module/) informed the enclosed equipment-rack modules; its [Cupola](https://www.nasa.gov/international-space-station/cupola/) informed framed observation windows. The game is an original fictional layout, not an ISS reconstruction. The current pass prioritizes opaque off-white pressure hulls, asymmetric circulation and star sightlines. Detailed art and surface treatment await the user's layout approval.
+The user selected the ISS as the primary spatial reference, with the enclosed spacecraft feel of *Ender's Game* as a secondary direction. NASA's [Destiny module](https://www.nasa.gov/international-space-station/destiny-laboratory-module/) informed the enclosed equipment-rack modules; its [Cupola](https://www.nasa.gov/international-space-station/cupola/) informed framed observation windows. The game is an original fictional layout, not an ISS reconstruction. The initial pass prioritized opaque off-white pressure hulls, asymmetric circulation and star sightlines. The later approved detail pass is documented below.
 
 
 ### Modular rebuild / October 4, 2026
@@ -56,4 +56,11 @@ The user supplied six visual references: enclosed off-white pressure tunnels, ro
 
 The [Greg Berry film-art gallery for Ender's Game](https://www.gregberry1.com/film/enders-game) was inspected before the rebuild. Its corridor stills (07 and 08) show enclosed off-white hulls, thick structural ribs and integrated conduits. We use that construction language as reference, without reproducing a film set. NASA's [Destiny laboratory overview](https://www.nasa.gov/international-space-station/destiny-laboratory-module/) provides the human-scale module reference, while the [Cupola interior](https://www.nasa.gov/image-article/interior-view-from-international-space-station-cupola/) informs thick frames and limited observation glazing.
 
-The playable blockout uses 5.6–6.4-metre octagonal modules and 2.25-metre-wide connector shells. It is a fictional, walkable adaptation, with gravity and automatic sliding hatches for gameplay. It is not a dimensional or operational reconstruction of the ISS.
+The initial playable blockout used 5.6–6.4-metre octagonal modules and 2.25-metre-wide connector shells; the approved pass below varies these dimensions. It is a fictional, walkable adaptation, with gravity and automatic sliding hatches for gameplay. It is not a dimensional or operational reconstruction of the ISS.
+
+
+### Approved layout detail and elevation pass
+
+Following layout approval, the user requested two substantial detail passes, varied room proportions, a larger Bridge observation deck, real stair/ramp connections and collected 3D props. The layout now has unequal elongated octagonal modules: a docking vestibule, compact archive, broad production workshop, elongated laboratory, transfer junction, habitat Commons and a much larger faceted observation Bridge. Production and Lab sit 1.05 m below the main deck, Commons 0.75 m above, and the Bridge 1.50 m above. Three connectors have actual stair treads; the Commons connection slopes upward.
+
+The original seven functional departments and sourced content remain intact. Equipment readouts, orbital telemetry and life-support hardware are fictional game scenery. Lighting and detail placement preserve readable off-white pressure hulls, dark mechanical recesses and selective Sentient lime accents.

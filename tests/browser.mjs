@@ -2,18 +2,24 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { canWalk, createWalkable, movePlayer } from '../src/navigation.js';
-import { MODULES, LINKS, routeTo } from '../src/layout.js';
+import { MODULES, LINKS, routeTo, surfaceHeight } from '../src/layout.js';
 import { rooms } from '../src/rooms.js';
 
 await mkdir('test-results', { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist'] });
 const failures = [];
+const assetFailures = [];
+const loadedModelURLs = new Set();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
 page.setDefaultTimeout(12000);
 const observeErrors = target => {
   target.on('pageerror', error => failures.push(error.message));
   target.on('console', message => {
     if (message.type() === 'error' && !/pointer.?lock/i.test(message.text())) failures.push(message.text());
+  });
+  target.on('response', response => {
+    if (response.status() >= 400) assetFailures.push(`${response.status()} ${response.url()}`);
+    if (/\/models\/.+\.glb(?:\?|$)/.test(response.url()) && response.ok()) loadedModelURLs.add(response.url());
   });
 };
 observeErrors(page);
@@ -33,8 +39,23 @@ try {
   const initial = await snapshot();
   assert.equal(initial.rooms.length, 7);
   assert.equal(initial.visited.length, 0);
-  assert.ok(initial.doors.length >= LINKS.length, 'Every connector has an automatic pressure hatch');
+  assert.equal(initial.doors.length, LINKS.length * 2, 'Every connector has two automatic pressure hatches');
   assert.ok(initial.triangles > 0, 'WebGL renders the pressure hull');
+  assert.equal(initial.sky.backgroundType, 'CubeTexture', 'Distant stars use a translation-independent sky');
+  assert.equal(initial.sky.pointClouds, 0, 'No nearby point-cloud stars can appear at the windows');
+  assert.equal(initial.importedStats.modelsLoaded, 19, 'Every authored GLB model loaded');
+  assert.equal(loadedModelURLs.size, 19, 'The browser successfully fetched all 19 local GLBs');
+  assert.equal(Object.keys(initial.importedStats.types).length, 19, 'All 19 model types are placed in the station');
+  assert.ok(Object.values(initial.importedStats.types).every(count => count > 0), 'Every model type has visible instances');
+  assert.equal(initial.importedStats.instances, initial.importedStats.placements.length);
+  assert.equal(initial.importedStats.instances, Object.values(initial.importedStats.types).reduce((sum, count) => sum + count, 0));
+  assert.ok(initial.importedStats.instances >= 35 && initial.importedStats.drawBatches > 0, 'Imported props are instantiated throughout the station');
+  assert.equal(new Set(initial.importedStats.placements.map(prop => prop.room)).size, 7, 'Every department contains authored props');
+  assert.equal(initial.importedStats.floorColliders, initial.colliders.filter(collider => collider.id?.startsWith('imported-')).length, 'Imported floor props have physical collision footprints');
+  assert.ok(initial.screenStats.banks >= 6 && initial.screenStats.screens >= 15, 'Real avionics screen banks populate the rooms');
+  assert.ok(initial.screenStats.buttons > 25 && initial.screenStats.gauges > 5 && initial.screenStats.parts > 100, 'Control banks include dimensional instruments');
+  assert.deepEqual(assetFailures, [], 'No missing models, textures, or other HTTP assets');
+  console.log(`PASS: all 19 GLBs loaded and used in ${initial.importedStats.instances} placements; ${initial.screenStats.screens} screens and ${initial.screenStats.buttons} physical controls.`);
   await page.screenshot({ path: 'test-results/arrival-desktop.png' });
 
   // Independently traverse the visible floor plan with physical props retained.
@@ -74,6 +95,22 @@ try {
   await page.getByRole('button', { name: /ENTER THE STATION/ }).click();
   await page.waitForFunction(() => window.__SENTIENT__.snapshot().active);
 
+  // Make the main architectural views available for review before long hatch checks.
+  for (const view of [
+    { x: 0, z: 1.3, yaw: 0, file: 'compact-arrival.png' },
+    { x: 0, z: -5, yaw: 0, file: 'pressure-tunnel.png' },
+    { x: -6.6, z: -11, yaw: -Math.PI / 2, file: 'lower-deck-stairs.png' },
+    { x: 0, z: -25.4, yaw: 0, file: 'bridge-ascending-stairs.png' },
+    { x: 0, z: -36, yaw: 0, file: 'bridge-cupola.png' },
+    { x: 0, z: -32.6, yaw: 0, file: 'bridge-control-room.png' },
+    ...MODULES.map(module => ({ x: module.x, z: module.z, yaw: module.id === 'bridge' ? -Math.PI * 3 / 4 : Math.PI * 3 / 4, file: `department-${module.id}.png` })),
+  ]) {
+    await teleport(view.x, view.z, view.yaw);
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `test-results/${view.file}` });
+  }
+  console.log('CAPTURED: arrival, pressure corridor, lower stairs, Bridge stairs, Bridge window, and seven department views.');
+
   // Exercise both sides of every hatch and its physical collider, not only its animation.
   for (const door of initial.doors) {
     const far = [...MODULES].sort((a, b) => Math.hypot(b.x - door.x, b.z - door.z) - Math.hypot(a.x - door.x, a.z - door.z))[0];
@@ -109,6 +146,50 @@ try {
   }
   await page.screenshot({ path: 'test-results/automatic-hatch.png' });
   console.log('PASS: physical keyboard movement crosses automatic hatches in both orientations.');
+
+  // Walk each staircase in both directions with real keyboard input. Samples
+  // verify the displayed camera follows the floor, not merely an elevation label.
+  const stairs = LINKS.filter(link => link.kind === 'stairs');
+  assert.equal(stairs.length, 3);
+  for (const link of [...stairs, ...LINKS.filter(link => link.kind === 'ramp')]) {
+    for (const reverse of [false, true]) {
+      const from = reverse ? link.b : link.a, to = reverse ? link.a : link.b;
+      const fromElevation = reverse ? link.elevationB : link.elevationA;
+      const toElevation = reverse ? link.elevationA : link.elevationB;
+      const length = Math.hypot(to.x - from.x, to.z - from.z);
+      const dx = (to.x - from.x) / length, dz = (to.z - from.z) / length;
+      const facing = Math.atan2(-dx, -dz);
+      await teleport(from.x - dx * .8, from.z - dz * .8, facing);
+      await page.waitForFunction(expected => Math.abs(window.__SENTIENT__.snapshot().cameraY - expected) < .03, fromElevation + 1.6);
+      const samples = [await snapshot()];
+      await page.keyboard.down('KeyW');
+      try {
+        const deadline = Date.now() + 14000;
+        while (true) {
+          await page.waitForTimeout(85);
+          const state = await snapshot();
+          samples.push(state);
+          const along = (state.position.x - from.x) * dx + (state.position.z - from.z) * dz;
+          if (along > length + .5) break;
+          assert.ok(Date.now() < deadline, `${link.id} ${reverse ? 'return' : 'outbound'} traversal must reach the next deck`);
+          assert.ok(state.active, 'Keyboard climbing remains active');
+        }
+      } finally { await page.keyboard.up('KeyW'); }
+      assert.ok(samples.length > 4, `${link.id} records actual climbing frames`);
+      const sign = Math.sign(toElevation - fromElevation);
+      for (let index = 0; index < samples.length; index++) {
+        const state = samples[index];
+        assert.ok(Math.abs(state.elevation - surfaceHeight(state.position)) < 1e-8, `${link.id} reports the floor underfoot`);
+        assert.ok(Math.abs(state.cameraY - state.elevation - 1.6) < .23, `${link.id} camera stays at walking height`);
+        assert.ok(canWalk(state.position.x, state.position.z, areas, state.colliders), `${link.id} stays inside its physical passage`);
+        if (index) assert.ok(sign * (state.elevation - samples[index - 1].elevation) >= -1e-8, `${link.id} elevation is monotonic during traversal`);
+      }
+      assert.ok(samples.some(state => sign * (state.elevation - fromElevation) > .2 && sign * (toElevation - state.elevation) > .2), `${link.id} crosses intermediate elevations`);
+      await page.waitForFunction(expected => Math.abs(window.__SENTIENT__.snapshot().cameraY - expected) < .035, toElevation + 1.6);
+      assert.ok(Math.abs((await snapshot()).elevation - toElevation) < 1e-8, `${link.id} reaches its destination deck`);
+    }
+  }
+  console.log('PASS: three staircases and the habitat ramp physically climbed and descended; camera height follows every deck.');
 
   // Approach each real terminal and inspect its complete source-backed content.
   for (const room of rooms) {
@@ -150,6 +231,8 @@ try {
   assert.equal((await snapshot()).visited.length, 0, 'New expedition clears progress');
   console.log('PASS: all terminals, completion, routed map, journal, persistence, reset and graphics controls.');
 
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__SENTIENT__.snapshot().active);
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByLabel('Graphics quality').selectOption('balanced');
   await page.getByLabel('Close dialog').click();
@@ -158,15 +241,21 @@ try {
   for (const view of [
     { x: 0, z: 1.3, yaw: 0, file: 'compact-arrival.png' },
     { x: 0, z: -5, yaw: 0, file: 'pressure-tunnel.png' },
-    { x: 0, z: -29, yaw: 0, file: 'bridge-cupola.png' },
+    { x: -6.6, z: -11, yaw: -Math.PI / 2, file: 'lower-deck-stairs.png' },
+    { x: 0, z: -25.4, yaw: 0, file: 'bridge-ascending-stairs.png' },
+    { x: 0, z: -36, yaw: 0, file: 'bridge-cupola.png' },
+    { x: 0, z: -32.6, yaw: 0, file: 'bridge-control-room.png' },
     { x: 0, z: -20, yaw: 0.7, file: 'module-junction.png' },
+    ...MODULES.map(module => ({ x: module.x, z: module.z, yaw: module.id === 'bridge' ? -Math.PI * 3 / 4 : Math.PI * 3 / 4, file: `department-${module.id}.png` })),
   ]) {
     await teleport(view.x, view.z, view.yaw);
     await page.waitForTimeout(700);
+    const viewState = await snapshot();
+    assert.ok(Math.abs(viewState.cameraY - surfaceHeight(viewState.position) - 1.6) < .035, `${view.file} shows the correct deck elevation`);
     await page.screenshot({ path: `test-results/${view.file}` });
   }
 
-  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
   observeErrors(mobile);
   await mobile.goto(base);
   await mobile.waitForFunction(() => window.__SENTIENT__ && document.getElementById('loading').hidden);
@@ -197,9 +286,19 @@ try {
   await mobile.getByRole('button', { name: 'Navigate to The Lab', exact: true }).tap();
   await mobile.waitForFunction(() => window.__SENTIENT__.snapshot().target === 'lab');
   assert.ok((await mobile.evaluate(() => window.__SENTIENT__.snapshot().route)).length > 1);
+  const reducedDoor = initial.doors[0];
+  const normal = reducedDoor.axis === 'x' ? { x: 1, z: 0 } : { x: 0, z: 1 };
+  await mobile.evaluate(({ door, normal }) => window.__SENTIENT__.teleport(door.x + normal.x * 1.1, door.z + normal.z * 1.1), { door: reducedDoor, normal });
+  await mobile.waitForFunction(id => window.__SENTIENT__.snapshot().doors.find(door => door.id === id).openness > .9, reducedDoor.id, { timeout: 5500 });
+  const far = [...MODULES].sort((a, b) => Math.hypot(b.x - reducedDoor.x, b.z - reducedDoor.z) - Math.hypot(a.x - reducedDoor.x, a.z - reducedDoor.z))[0];
+  await mobile.evaluate(({ x, z }) => window.__SENTIENT__.teleport(x, z), far);
+  await mobile.waitForFunction(id => window.__SENTIENT__.snapshot().doors.find(door => door.id === id).openness < .06, reducedDoor.id, { timeout: 5500 });
+  assert.equal(await mobile.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true);
   await mobile.close();
   console.log('PASS: mobile layout, joystick, touch terminal scanning and usable routed map.');
+  console.log('PASS: reduced-motion preference preserves real-time hatch opening and closing.');
   assert.deepEqual(failures, [], 'No browser or WebGL errors');
+  assert.deepEqual(assetFailures, [], 'No HTTP asset failures on desktop, reload, or mobile');
   console.log('PASS: no browser / WebGL errors.');
 } catch (error) {
   await page.screenshot({ path: 'test-results/failure.png' }).catch(() => {});

@@ -1,13 +1,20 @@
 // Metres. One shared pressure-hull plan drives geometry, collision and navigation.
 export const MODULES = [
-  { id: 'front-door', x: 0, z: 0, a: 2.8, cut: 1.2 },
-  { id: 'archive', x: 0, z: -10, a: 3, cut: 1.3 },
-  { id: 'floor', x: -10, z: -10, a: 3.1, cut: 1.3 },
-  { id: 'lab', x: -10, z: -20, a: 2.8, cut: 1.2 },
-  { id: 'forum', x: 0, z: -20, a: 3, cut: 1.3 },
-  { id: 'commons', x: 10, z: -20, a: 3.2, cut: 1.4 },
-  { id: 'bridge', x: 0, z: -30, a: 3.2, cut: 1.4 },
-].map(m => ({ ...m, ports: [], terminal: { x: m.x + m.a - .95, z: m.z - m.a + .95 }, approach: { x: m.x + m.a - 1.65, z: m.z - m.a + 1.65 } }));
+  { id: 'front-door', x: 0, z: 0, hx: 2.55, hz: 3.3, cut: 1.35, character: 'docking' },
+  { id: 'archive', x: 0, z: -11, hx: 2.45, hz: 3.15, cut: 1.0, character: 'vault' },
+  { id: 'floor', x: -11, z: -11, hx: 3.7, hz: 2.7, cut: 1.3, character: 'workshop' },
+  { id: 'lab', x: -11, z: -22, hx: 2.7, hz: 3.4, cut: 1.65, character: 'laboratory' },
+  { id: 'forum', x: 0, z: -22, hx: 3.4, hz: 2.55, cut: 1.25, character: 'junction' },
+  { id: 'commons', x: 11.5, z: -22, hx: 3.9, hz: 2.7, cut: 1.5, character: 'habitat' },
+  { id: 'bridge', x: 0, z: -35, hx: 4.8, hz: 5.0, cut: 2.2, character: 'observatory' },
+].map(m => {
+  const south = m.id === 'bridge';
+  const elevation = {floor:-1.05, lab:-1.05, commons:.75, bridge:1.5}[m.id] || 0;
+  const terminal = { x: m.x + m.hx - m.cut / 2 - .35, z: m.z + (south ? 1 : -1) * (m.hz - m.cut / 2 - .35) };
+  return { ...m, elevation, a: Math.min(m.hx,m.hz), ports: [], terminal,
+    terminalYaw: south ? -Math.PI * 3 / 4 : -Math.PI / 4,
+    approach: { x: terminal.x - .7, z: terminal.z + (south ? -.7 : .7) } };
+});
 
 export const LINKS = [
   ['front-door', 'archive'], ['archive', 'floor'], ['floor', 'lab'],
@@ -17,12 +24,14 @@ export const LINKS = [
   const dx = Math.sign(second.x - first.x), dz = Math.sign(second.z - first.z);
   const port = dx ? dx > 0 ? 'E' : 'W' : dz > 0 ? 'S' : 'N';
   first.ports.push(port); second.ports.push({ N: 'S', S: 'N', E: 'W', W: 'E' }[port]);
-  return { id: `${from}--${to}`, from, to, a: { x: first.x + dx * first.a, z: first.z + dz * first.a }, b: { x: second.x - dx * second.a, z: second.z - dz * second.a }, width: 2.25 };
+  const widths = { 'front-door': 2.25, 'floor': 2.5, 'lab': 2.05 };
+  const width = to === 'commons' ? 2.7 : to === 'bridge' ? 2.5 : to === 'floor' ? 2.0 : widths[from] || 2.3;
+  return { id: `${from}--${to}`, from, to, a: { x: first.x + dx * first.hx, z: first.z + dz * first.hz }, b: { x: second.x - dx * second.hx, z: second.z - dz * second.hz }, width, elevationA: first.elevation, elevationB: second.elevation, kind: first.elevation === second.elevation ? 'level' : to === 'commons' ? 'ramp' : 'stairs' };
 });
 
 export function modulePolygon(m) {
-  const a = m.a, b = a - m.cut;
-  return [[-b,-a],[b,-a],[a,-b],[a,b],[b,a],[-b,a],[-a,b],[-a,-b]].map(([x,z]) => ({ x: x + m.x, z: z + m.z }));
+  const x = m.hx, z = m.hz, cx = x - m.cut, cz = z - m.cut;
+  return [[-cx,-z],[cx,-z],[x,-cz],[x,cz],[cx,z],[-cx,z],[-x,cz],[-x,-cz]].map(([x,z]) => ({ x: x + m.x, z: z + m.z }));
 }
 
 export function insidePolygon(x, z, points) {
@@ -79,4 +88,20 @@ export function routeTo(position, targetId) {
   result.push({ ...goal.approach });
   while (result.length > 1 && Math.hypot(result[0].x-position.x,result[0].z-position.z) < .65) result.shift();
   return result;
+}
+
+export function surfaceHeight(point) {
+  const module = moduleAt(point);
+  if (module) return module.elevation;
+  for (const link of LINKS) {
+    const dx = link.b.x-link.a.x, dz = link.b.z-link.a.z, length2 = dx*dx+dz*dz;
+    const t = Math.max(0,Math.min(1,((point.x-link.a.x)*dx+(point.z-link.a.z)*dz)/length2));
+    const x = link.a.x+t*dx, z = link.a.z+t*dz;
+    if (Math.hypot(point.x-x,point.z-z) <= link.width/2+.05) {
+      const steps = Math.max(1,Math.round(Math.abs(link.elevationB-link.elevationA)/.15));
+      const factor = link.kind === 'stairs' ? Math.min(steps,Math.floor(t*steps+.0001))/steps : t;
+      return link.elevationA+(link.elevationB-link.elevationA)*factor;
+    }
+  }
+  return 0;
 }

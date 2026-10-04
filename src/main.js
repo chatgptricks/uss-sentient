@@ -3,10 +3,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rooms } from './rooms.js';
 import { createWorld } from './world.js';
 import { START, createWalkable, movePlayer, readProgress } from './navigation.js';
-import { LINKS, modulePolygon, moduleAt, routeTo } from './layout.js';
+import { LINKS, modulePolygon, moduleAt, routeTo, surfaceHeight } from './layout.js';
 import './style.css';
 
 const icons = {
@@ -32,17 +34,18 @@ let active = false, started = false, modal = null, target = rooms.find(r => !vis
 let nearRoom = null, yaw = 0, pitch = 0, sensitivity = 1, elapsed = 0, bobTime = 0;
 let muted = true, audioContext, masterGain, toastTimer, lastSaveWarning = false;
 let quality = coarse ? 'performance' : 'balanced';
+let eyeHeight = surfaceHeight(START) + 1.6;
 let position = { ...START }, keys = new Set(), drag = null, moveTouch = { x: 0, y: 0 };
 const walkable = createWalkable(rooms);
 
 $('app').innerHTML = `
   <header class="topbar">
-    <div class="brand"><img src="/brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>MODULAR STATION / 0.2</span></div></div>
+    <div class="brand"><img src="/brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL STATION / 0.3</span></div></div>
     <div class="top-actions"><div class="live-status"><i class="status-dot"></i> ALL SYSTEMS NOMINAL</div><button id="map-btn" class="icon-button" title="Deck map (M)" aria-label="Open deck map">${svg('map')}<span class="nav-label">DECK MAP</span><kbd>M</kbd></button><button id="journal-btn" class="icon-button" title="Expedition log (J)" aria-label="Open expedition log">${svg('book')}</button><button id="sound-btn" class="icon-button" title="Enable ambient audio" aria-label="Enable ambient audio" aria-pressed="false">${svg('mute')}</button><button id="settings-btn" class="icon-button" title="Settings" aria-label="Open settings">${svg('settings')}</button><button id="fullscreen-btn" class="icon-button" title="Fullscreen" aria-label="Toggle fullscreen">${svg('expand')}</button></div>
   </header>
   <div class="coordinates"><span>SECTOR 07</span><span class="slash">/</span><span>SENTIENT SYSTEM</span></div>
   <div class="compass" aria-hidden="true"><span>NW</span><i></i><i></i><b id="heading">000° N</b><i></i><i></i><span>NE</span></div>
-  <aside id="welcome" class="welcome"><div class="eyebrow" id="welcome-label">EXPLORE THE FIRST LAYOUT</div><h1>USS<span>SENTIENT.</span></h1><p id="welcome-copy">An orbital home for Sentient. Explore seven connected modules beneath the light of a neon star.</p><button id="start-btn" class="primary">${visited.size ? 'CONTINUE EXPEDITION' : 'ENTER THE STATION'}${svg('arrow')}</button><div class="play-note">${coarse ? 'LEFT THUMB TO MOVE · DRAG TO LOOK' : 'WASD TO MOVE · MOUSE TO LOOK · E TO DISCOVER'}</div><button id="reset-btn" class="tiny-btn" ${visited.size ? '' : 'hidden'}>Start a new expedition</button></aside>
+  <aside id="welcome" class="welcome"><div class="eyebrow" id="welcome-label">WELCOME ABOARD</div><h1>USS<span>SENTIENT.</span></h1><p id="welcome-copy">An orbital home for Sentient. Explore seven connected modules beneath the light of a neon star.</p><button id="start-btn" class="primary">${visited.size ? 'CONTINUE EXPEDITION' : 'ENTER THE STATION'}${svg('arrow')}</button><div class="play-note">${coarse ? 'LEFT THUMB TO MOVE · DRAG TO LOOK' : 'WASD TO MOVE · MOUSE TO LOOK · E TO DISCOVER'}</div><button id="reset-btn" class="tiny-btn" ${visited.size ? '' : 'hidden'}>Start a new expedition</button></aside>
   <aside class="stellar"><div class="eyebrow">CURRENT ORBIT</div><h3>Sol Sentient</h3><p>STELLAR CLASS <span>NEON / LIME</span></p><p>ORBIT <span>STABLE</span></p><p>LOCAL CYCLE <span id="cycle">07:24:00</span></p><div class="bar"></div></aside>
   <aside id="mission" class="mission" hidden><div class="eyebrow">EXPEDITION 001</div><h2 id="mission-title">Connect the constellation</h2><p id="mission-copy">Find the department terminals. Collect seven signals to synchronize the station.</p><div class="progress-track"><span id="progress"></span></div><div class="mission-bottom"><span>STATION SYNCHRONIZATION</span><b id="progress-label">0 / 7</b></div></aside>
   <div id="crosshair" class="crosshair" hidden></div><button id="interact" class="interact" hidden><kbd>E</kbd><span id="interact-label">ACCESS TERMINAL</span></button><div id="waypoint" class="waypoint" hidden><div class="diamond"></div><span id="waypoint-label"></span></div>
@@ -55,7 +58,7 @@ $('app').innerHTML = `
   <div id="loading" class="loading"><img src="/brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
 `;
 
-let renderer, scene, camera, composer, bloom, world;
+let renderer, scene, camera, composer, bloom, ambientOcclusion, world;
 await Promise.all([document.fonts.load('400 16px Space'), document.fonts.load('500 16px Space')]).catch(() => {});
 try {
   renderer = new THREE.WebGLRenderer({ canvas: $('world'), antialias: true, powerPreference: 'high-performance' });
@@ -69,18 +72,28 @@ try {
   renderer.info.autoReset = false;
   scene = new THREE.Scene();
   scene.background = new THREE.Color('#02080c');
+  const lightingRoom = new RoomEnvironment(), pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(lightingRoom, .04).texture;
+  scene.environmentIntensity = .23;
+  lightingRoom.dispose(); pmrem.dispose();
   camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, .08, 1800);
   camera.rotation.order = 'YXZ';
-  world = createWorld(scene, rooms);
+  world = await createWorld(scene, rooms);
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
+  ambientOcclusion = new SSAOPass(scene, camera, innerWidth, innerHeight, 16);
+  ambientOcclusion.kernelRadius = .30;
+  ambientOcclusion.minDistance = .000018;
+  ambientOcclusion.maxDistance = .00065;
+  composer.addPass(ambientOcclusion);
   bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .35, 1.2);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   applyQuality();
   requestAnimationFrame(() => { $('loading').hidden = true; });
 } catch (error) {
-  $('loading').innerHTML = `<img src="/brand/sentient-logo.svg" alt="Sentient"/><span>THE STATION COULD NOT INITIALIZE</span><p style="max-width:360px;text-align:center;line-height:1.7;letter-spacing:0">A WebGL 2 capable browser is needed to explore. Enable hardware acceleration, then reload.</p><button class="primary" onclick="location.reload()">RETRY CONNECTION</button>`;
+  const recovery = renderer ? 'Some station resources could not load. Reload to reconnect.' : 'A WebGL 2 capable browser is needed to explore. Enable hardware acceleration, then reload.';
+  $('loading').innerHTML = `<img src="/brand/sentient-logo.svg" alt="Sentient"/><span>THE STATION COULD NOT INITIALIZE</span><p style="max-width:360px;text-align:center;line-height:1.7;letter-spacing:0">${recovery}</p><button class="primary" onclick="location.reload()">RETRY CONNECTION</button>`;
   console.error('Station initialization failed', error);
   throw error;
 }
@@ -90,9 +103,12 @@ function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, ratios[quality]));
   composer.setPixelRatio(renderer.getPixelRatio());
   bloom.enabled = quality !== 'performance';
+  ambientOcclusion.enabled = quality !== 'performance';
   renderer.shadowMap.enabled = quality !== 'performance';
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
+  const aoScale = quality === 'high' ? 1 : .65;
+  ambientOcclusion.setSize(Math.ceil(innerWidth*aoScale),Math.ceil(innerHeight*aoScale));
 }
 
 function notify(message) {
@@ -200,9 +216,9 @@ function openMap() {
   renderMap($('deck-canvas'), true);
   $('deck-canvas').onclick = event => {
     const canvas = event.currentTarget, bounds = canvas.getBoundingClientRect();
-    const scale = Math.min((canvas.width-35)/29,(canvas.height-40)/39);
+    const scale = Math.min((canvas.width-35)/33,(canvas.height-40)/47);
     const x = ((event.clientX-bounds.left)/bounds.width*canvas.width-canvas.width/2)/scale;
-    const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-15;
+    const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-18.3;
     const module = moduleAt({x,z});
     if (module) { target = rooms.find(r => r.id===module.id); notify(`Route set: ${target.name}. Follow the lime arrow.`); closeModal(); }
   };
@@ -223,7 +239,7 @@ function openJournal() {
 
 function openSettings() {
   openModal('settings', 'Make yourself at home.', 'EXPEDITION SETTINGS',
-    `<div class="settings-row"><div>Graphics quality<small>Performance disables bloom and reduces pixel density.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>A quiet station hum and discovery tones.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Access terminal</span><b>E</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap SCAN near a terminal. This fictional station is based on Sentient's documented seven functional zones.</p>`);
+    `<div class="settings-row"><div>Graphics quality<small>Performance disables bloom and contact shading, and reduces pixel density.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>A quiet station hum and discovery tones.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Access terminal</span><b>E</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap SCAN near a terminal. This fictional station is based on Sentient's documented seven functional zones.</p>`);
   $('quality').value = quality;
   $('quality').onchange = event => { quality = event.target.value; applyQuality(); };
   $('sensitivity').oninput = event => { sensitivity = Number(event.target.value); };
@@ -268,9 +284,9 @@ function playChime() {
 function renderMap(canvas, large = false) {
   const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  const scale = Math.min((width - 35) / 29, (height - 40) / 39);
+  const scale = Math.min((width - 35) / 33, (height - 40) / 47);
   const px = x => width / 2 + x * scale;
-  const pz = z => height / 2 + (z + 15) * scale;
+  const pz = z => height / 2 + (z + 18.3) * scale;
   ctx.strokeStyle = '#63855820'; ctx.lineWidth = 1;
   for (let x = 0; x < width; x += 22) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
   for (let y = 0; y < height; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
@@ -279,6 +295,10 @@ function renderMap(canvas, large = false) {
     ctx.beginPath(); ctx.moveTo(px(link.a.x),pz(link.a.z)); ctx.lineTo(px(link.b.x),pz(link.b.z));
     ctx.strokeStyle = '#78978165'; ctx.lineWidth = link.width * scale; ctx.stroke();
     ctx.strokeStyle = '#152922'; ctx.lineWidth = (link.width-.2) * scale; ctx.stroke();
+    if (link.kind !== 'level') {
+      ctx.strokeStyle = link.kind === 'stairs' ? '#d8e2ce' : '#8cafb6'; ctx.lineWidth = 1;
+      for(let i=1;i<6;i++) { const x=px(link.a.x+(link.b.x-link.a.x)*i/6), z=pz(link.a.z+(link.b.z-link.a.z)*i/6); const dx=link.a.x===link.b.x?link.width*scale*.4:0, dz=link.a.z===link.b.z?link.width*scale*.4:0; ctx.beginPath();ctx.moveTo(x-dx,z-dz);ctx.lineTo(x+dx,z+dz);ctx.stroke(); }
+    }
   }
   for (const room of rooms) {
     const points = modulePolygon(room);
@@ -298,7 +318,7 @@ function renderMap(canvas, large = false) {
     ctx.fillStyle = target.id === room.id ? '#cfff04' : '#f5f5ef';
     ctx.fillText(room.number,px(room.x),pz(room.z)-3);
     ctx.font = `${large ? 15 : 10}px Space, sans-serif`; ctx.fillStyle = '#c7d0c9';
-    if (large) ctx.fillText(room.shortName.toUpperCase(),px(room.x),pz(room.z)+16);
+    if (large) { ctx.fillText(room.shortName.toUpperCase(),px(room.x),pz(room.z)+16); ctx.font='11px Space';ctx.fillStyle='#819b91';ctx.fillText(`${room.elevation>0?'+':''}${room.elevation.toFixed(2)} m`,px(room.x),pz(room.z)+31); }
   }
   ctx.save(); ctx.translate(px(position.x), pz(position.z)); ctx.rotate(-yaw);
   ctx.fillStyle = '#cfff0428'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 23, -Math.PI / 2 - .5, -Math.PI / 2 + .5); ctx.closePath(); ctx.fill();
@@ -315,13 +335,15 @@ function updatePlayer(dt) {
   position = movePlayer(position, dx, dz, walkable, world.colliders || []);
   if (Math.abs(dx) + Math.abs(dz) > .001) bobTime += dt * 9;
   const bob = reduced ? 0 : Math.sin(bobTime) * .022 * Math.min(1, Math.hypot(inputX, inputZ));
-  camera.position.set(position.x, 1.6 + bob, position.z);
+  eyeHeight += (surfaceHeight(position) + 1.6 - eyeHeight) * (1-Math.exp(-dt*12));
+  camera.position.set(position.x, eyeHeight + bob, position.z);
 }
 
 const markerPoint = new THREE.Vector3(), direction = new THREE.Vector3();
 function updateHUD() {
   const module = moduleAt(position);
   const room = rooms.find(r => r.id === module?.id);
+  $('location-deck').textContent = `/ ${surfaceHeight(position)>1?'OBSERVATION DECK':surfaceHeight(position)<-.5?'LOWER DECK':surfaceHeight(position)>.4?'HABITAT DECK':'MAIN DECK'}`;
   $('location-name').textContent = room ? room.name : 'Pressure tunnel';
   $('location-number').textContent = room ? room.number : '↗';
   $('location-function').textContent = room ? room.designation : 'Module transit / automatic hatches';
@@ -339,7 +361,7 @@ function updateHUD() {
   $('route-arrow').style.transform = `rotate(${bearing}rad)`;
   $('route-destination').textContent = `${target.shortName.toUpperCase()} · ${Math.ceil(distance)} m`;
   $('route-step').textContent = nearRoom?.id === target.id ? 'PRESS E TO CONNECT' : room?.id === target.id ? 'DEPARTMENT TERMINAL' : 'FOLLOW THE HATCHES';
-  markerPoint.set(next.x, 1.5, next.z);
+  markerPoint.set(next.x, surfaceHeight(next)+1.5, next.z);
   direction.copy(markerPoint).sub(camera.position);
   const inFront = direction.dot(camera.getWorldDirection(new THREE.Vector3())) > 0;
   markerPoint.project(camera);
@@ -420,9 +442,9 @@ let previous = performance.now(), hudTime = 0;
 renderer.setAnimationLoop(now => {
   const dt = Math.min((now - previous) / 1000, .05); previous = now; elapsed += dt;
   if (active) updatePlayer(dt);
-  else camera.position.set(position.x, 1.6, position.z);
+  else { eyeHeight = surfaceHeight(position)+1.6; camera.position.set(position.x, eyeHeight, position.z); }
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  world.animate?.(reduced ? elapsed * .15 : elapsed, dt, position);
+  world.animate?.(elapsed, dt, position, reduced ? .15 : 1);
   hudTime += dt;
   if (hudTime > .065) { updateHUD(); hudTime = 0; }
   $('cycle').textContent = `07:${String(24 + Math.floor(elapsed / 60) % 36).padStart(2,'0')}:${String(Math.floor(elapsed) % 60).padStart(2,'0')}`;
@@ -431,10 +453,11 @@ renderer.setAnimationLoop(now => {
 });
 
 if (import.meta.env.DEV) {
+  let pointClouds = 0; scene.traverse(object => { if (object.isPoints) pointClouds++; });
   window.__SENTIENT__ = {
-    snapshot: () => ({ active, started, modal, position: { ...position }, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: routeTo(position, target.id), doors: (world.doors || []).map(d => ({ id: d.id, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
+    snapshot: () => ({ active, started, modal, position: { ...position }, elevation: surfaceHeight(position), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: routeTo(position, target.id), doors: (world.doors || []).map(d => ({ id: d.id, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
     // Development-only positioning lets the browser test inspect every terminal.
-    teleport: (x, z, facing = 0) => { position = { x, z }; yaw = facing; pitch = 0; },
+    teleport: (x, z, facing = 0) => { position = { x, z }; eyeHeight = surfaceHeight(position)+1.6; yaw = facing; pitch = 0; },
     renderInfo: () => renderer.info,
   };
 }

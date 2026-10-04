@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rooms } from '../src/rooms.js';
-import { MODULES, LINKS, modulePolygon, insidePolygon, routeTo } from '../src/layout.js';
+import { MODULES, LINKS, modulePolygon, insidePolygon, routeTo, surfaceHeight } from '../src/layout.js';
 import { PLAYER_RADIUS, START, createWalkable, canWalk, movePlayer, readProgress } from '../src/navigation.js';
 
 const areas = createWalkable(rooms);
@@ -108,11 +108,14 @@ test('tube-to-module seams stay open while tube walls reject body clipping', () 
 
 test('octagonal chamfers and unconnected hull faces are solid', () => {
   for (const module of MODULES) {
+    const polygon = modulePolygon(module);
+    const extentX = Math.max(...polygon.map(point => Math.abs(point.x - module.x)));
+    const extentZ = Math.max(...polygon.map(point => Math.abs(point.z - module.z)));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      assert.equal(canWalk(module.x + sx * (module.a - 0.1), module.z + sz * (module.a - 0.1), areas), false, `${module.id} corner`);
+      assert.equal(canWalk(module.x + sx * (extentX - 0.1), module.z + sz * (extentZ - 0.1), areas), false, `${module.id} corner`);
     }
     for (const [port, dx, dz] of [['N', 0, -1], ['S', 0, 1], ['E', 1, 0], ['W', -1, 0]]) {
-      if (!module.ports.includes(port)) assert.equal(canWalk(module.x + dx * module.a, module.z + dz * module.a, areas), false, `${module.id} ${port}`);
+      if (!module.ports.includes(port)) assert.equal(canWalk(module.x + dx * extentX, module.z + dz * extentZ, areas), false, `${module.id} ${port}`);
     }
   }
   for (const point of [{ x: 100, z: 100 }, { x: 5, z: -5 }, { x: -5, z: -15 }, { x: 10, z: -10 }]) {
@@ -121,13 +124,53 @@ test('octagonal chamfers and unconnected hull faces are solid', () => {
 });
 
 test('movement slides along narrow tubes and cannot tunnel out of the station', () => {
-  const next = movePlayer({ x: 0.5, z: -4.5 }, 1, -1, areas);
-  assert.ok(next.x >= 0.5 && next.x <= 1.8 / 2 - PLAYER_RADIUS);
-  assert.ok(Math.abs(next.z + 5.5) < 0.001, 'Unblocked movement continues along the tube');
+  const link = LINKS.find(link => link.from === 'front-door');
+  const center = { x: (link.a.x + link.b.x) / 2, z: (link.a.z + link.b.z) / 2 };
+  const next = movePlayer({ x: center.x + 0.2, z: center.z }, 1, -1, areas);
+  assert.ok(next.x >= center.x + 0.2 && next.x <= center.x + (link.width - .45) / 2 - PLAYER_RADIUS + 0.001);
+  assert.ok(Math.abs(next.z - (center.z - 1)) < 0.001, 'Unblocked movement continues along the tube');
   const escaped = movePlayer({ x: 0, z: 0 }, 0, 50, areas);
-  assert.ok(escaped.z < 2.8 - PLAYER_RADIUS + 0.001);
-  assert.ok(escaped.z > 2.2);
+  const arrival = MODULES.find(module => module.id === 'front-door');
+  const southWall = Math.max(...modulePolygon(arrival).map(point => point.z));
+  assert.ok(escaped.z < southWall - PLAYER_RADIUS + 0.001);
+  assert.ok(escaped.z > southWall - PLAYER_RADIUS - 0.2);
   assert.ok(canWalk(escaped.x, escaped.z, areas));
+});
+
+test('unequal modules use their own footprint and all four deck elevations', () => {
+  assert.ok(new Set(MODULES.map(module => `${module.hx},${module.hz}`)).size >= 6);
+  assert.ok(MODULES.some(module => module.hx !== module.hz));
+  assert.deepEqual([...new Set(MODULES.map(module => module.elevation))].sort((a, b) => a - b), [-1.05, 0, .75, 1.5]);
+  for (const module of MODULES) {
+    assert.equal(surfaceHeight(module), module.elevation, `${module.id} center elevation`);
+    assert.equal(surfaceHeight(module.approach), module.elevation, `${module.id} terminal approach elevation`);
+    assert.equal(surfaceHeight(module.terminal), module.elevation, `${module.id} console floor elevation`);
+  }
+});
+
+test('stair and ramp heights meet both decks and change monotonically in both directions', () => {
+  assert.equal(LINKS.filter(link => link.kind === 'stairs').length, 3);
+  assert.equal(LINKS.filter(link => link.kind === 'ramp').length, 1);
+  for (const link of LINKS) {
+    const heights = Array.from({ length: 201 }, (_, index) => surfaceHeight({
+      x: link.a.x + (link.b.x - link.a.x) * index / 200,
+      z: link.a.z + (link.b.z - link.a.z) * index / 200,
+    }));
+    assert.ok(Math.abs(heights[0] - link.elevationA) < 1e-8, `${link.id} first landing`);
+    assert.ok(Math.abs(heights.at(-1) - link.elevationB) < 1e-8, `${link.id} last landing`);
+    for (const sequence of [heights, [...heights].reverse()]) {
+      const direction = Math.sign(sequence.at(-1) - sequence[0]);
+      for (let index = 1; index < sequence.length; index++) {
+        const delta = sequence[index] - sequence[index - 1];
+        assert.ok(direction * delta >= -1e-8, `${link.id} never reverses slope`);
+        assert.ok(Math.abs(delta) <= .151, `${link.id} never introduces a tall step`);
+      }
+    }
+    if (link.kind === 'level') assert.ok(heights.every(height => height === link.elevationA));
+    if (link.kind === 'ramp') {
+      assert.ok(Math.abs(heights[100] - (link.elevationA + link.elevationB) / 2) < 1e-8, `${link.id} ramp midpoint`);
+    }
+  }
 });
 
 test('large movements stop at thin closed colliders and cross disabled open colliders', () => {

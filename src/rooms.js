@@ -127,5 +127,5 @@ export const rooms = [
   },
 ].map(room => {
   const module = MODULES.find(m => m.id === room.id);
-  return { ...room, ...module, w: module.a * 2, d: module.a * 2 };
+  return { ...room, ...module, w: module.hx * 2, d: module.hz * 2 };
 });

@@ -7,8 +7,8 @@ export function createWalkable() {
   return [
     ...MODULES.map(m => ({ id: m.id, points: modulePolygon(m), x: m.x, z: m.z })),
     ...LINKS.map(l => ({ id: l.id, x: (l.a.x+l.b.x)/2, z: (l.a.z+l.b.z)/2,
-      w: Math.abs(l.a.x-l.b.x) + (l.a.x===l.b.x ? 1.8 : .12),
-      d: Math.abs(l.a.z-l.b.z) + (l.a.z===l.b.z ? 1.8 : .12) })),
+      w: Math.abs(l.a.x-l.b.x) + (l.a.x===l.b.x ? l.width-.45 : .12),
+      d: Math.abs(l.a.z-l.b.z) + (l.a.z===l.b.z ? l.width-.45 : .12) })),
   ];
 }
 
