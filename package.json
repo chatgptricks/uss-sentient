@@ -12,7 +12,8 @@
     "test:lighting": "node tests/lighting.mjs",
     "test:quarters": "node tests/quarters.mjs",
     "test:raytrace": "node tests/raytrace.mjs",
-    "test:doors": "node tests/doors.mjs"
+    "test:doors": "node tests/doors.mjs",
+    "test:deployment": "node tests/deployment.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

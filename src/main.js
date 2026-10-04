@@ -40,7 +40,7 @@ const walkable = createWalkable(rooms);
 
 $('app').innerHTML = `
   <header class="topbar">
-    <div class="brand"><img src="/brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL STATION / 0.3</span></div></div>
+    <div class="brand"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL STATION / 0.3</span></div></div>
     <div class="top-actions"><div class="live-status"><i class="status-dot"></i> ALL SYSTEMS NOMINAL</div><button id="map-btn" class="icon-button" title="Deck map (M)" aria-label="Open deck map">${svg('map')}<span class="nav-label">DECK MAP</span><kbd>M</kbd></button><button id="journal-btn" class="icon-button" title="Expedition log (J)" aria-label="Open expedition log">${svg('book')}</button><button id="sound-btn" class="icon-button" title="Enable ambient audio" aria-label="Enable ambient audio" aria-pressed="false">${svg('mute')}</button><button id="settings-btn" class="icon-button" title="Settings" aria-label="Open settings">${svg('settings')}</button><button id="fullscreen-btn" class="icon-button" title="Fullscreen" aria-label="Toggle fullscreen">${svg('expand')}</button></div>
   </header>
   <div class="coordinates"><span>SECTOR 07</span><span class="slash">/</span><span>SENTIENT SYSTEM</span></div>
@@ -56,7 +56,7 @@ $('app').innerHTML = `
   <div id="touch-controls" class="touch-controls"><div id="joystick" class="joystick" aria-label="Movement joystick"><span id="joystick-knob"></span></div><button id="touch-interact" class="touch-interact" aria-label="Interact with terminal">SCAN</button></div>
   <aside id="photo-panel" class="photo-panel" hidden aria-label="Ray-traced still view"><div><div class="eyebrow">RAY-TRACED STILL VIEW</div><p id="photo-status" role="status">Preparing light paths</p><small>Camera paused · The image refines as light samples accumulate.</small></div><button id="photo-exit" class="primary">BACK TO EXPLORATION <kbd>ESC</kbd></button></aside>
   <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="modal-root" hidden></div>
-  <div id="loading" class="loading"><img src="/brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
+  <div id="loading" class="loading"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
 `;
 
 let renderer, scene, camera, composer, bloom, ambientOcclusion, world;
@@ -85,7 +85,7 @@ try {
   requestAnimationFrame(() => { $('loading').hidden = true; });
 } catch (error) {
   const recovery = renderer ? 'Some station resources could not load. Reload to reconnect.' : 'A WebGL 2 capable browser is needed to explore. Enable hardware acceleration, then reload.';
-  $('loading').innerHTML = `<img src="/brand/sentient-logo.svg" alt="Sentient"/><span>THE STATION COULD NOT INITIALIZE</span><p style="max-width:360px;text-align:center;line-height:1.7;letter-spacing:0">${recovery}</p><button class="primary" onclick="location.reload()">RETRY CONNECTION</button>`;
+  $('loading').innerHTML = `<img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><span>THE STATION COULD NOT INITIALIZE</span><p style="max-width:360px;text-align:center;line-height:1.7;letter-spacing:0">${recovery}</p><button class="primary" onclick="location.reload()">RETRY CONNECTION</button>`;
   console.error('Station initialization failed', error);
   throw error;
 }

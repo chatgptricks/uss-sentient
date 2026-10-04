@@ -1,5 +1,7 @@
 # USS Sentient
 
+[Play the game](https://chatgptricks.github.io/uss-sentient/) · [GitHub repository](https://github.com/chatgptricks/uss-sentient)
+
 A Three.js exploration game inside an enclosed, ISS-inspired spacecraft. Seven Sentient departments occupy distinct off-white pressure modules, joined by narrow tubes, fourteen automatic rounded hatches, three stair corridors and a sloping habitat connection. The expanded Bridge is an elevated observation deck with three angled viewing bays overlooking a neon-lime star.
 
 The approved modular layout has developed into a detailed interior: structural ribs, service trays, pipe bundles, equipment cabinets, fasteners, instruments and department-specific screens. Distant stars use an infinite background without walking parallax; observation glass does not reflect cabin lamps as false nearby stars.
@@ -53,8 +55,22 @@ Desktop keyboard and mouse controls and on-screen touch controls are supported. 
 
 The optional ray-traced still view progressively accumulates samples from a fixed camera. Movement pauses while the image converges; press Esc to return to exploration. The first samples are grainy and refine over time. This browser rendering mode does not imply dedicated hardware ray-tracing support or real-time ray-traced movement. `npm run test:raytrace` verifies real sample accumulation, cancellation, repeated entry, and resumed exploration.
 
-The USS Sentient, its star, station architecture and scan mission are fictional. This is a purely local game with no company-service integrations or live company data. Original Sentient source projects are unchanged.
+The USS Sentient, its star, station architecture and scan mission are fictional. This is a standalone static game with no company-service integrations or live company data. Original Sentient source projects are unchanged.
 
 ## Imported props
 
 Nineteen original Kenney GLB models supply computers, consoles, cargo cases, generators and communications equipment. A further 27 instrument screens, 220 physical controls and 22 gauges are built into the pressure hull. Selected reusable 3D assets are stored locally under `public/models/`, with licenses and provenance in [ASSET-CREDITS.md](docs/ASSET-CREDITS.md). Original files are kept small and load before exploration begins.
+
+## GitHub Pages deployment
+
+Pushes to `main` run the navigation tests, build with the Pages base path and publish `dist/` through `.github/workflows/pages.yml`. The workflow can also be run manually from GitHub Actions. The repository is public because this account’s plan requires a public repository for Pages.
+
+Local development still uses `/`. To reproduce the project-site build locally:
+
+```bash
+VITE_BASE_PATH=/uss-sentient/ npm run build
+VITE_BASE_PATH=/uss-sentient/ npm run preview -- --port 4183
+GAME_URL=http://127.0.0.1:4183/uss-sentient/ npm run test:deployment
+```
+
+The deployment smoke test uses the public UI rather than development-only helpers. It checks local models and fonts, actual walking through a hatch, map guidance, the default Performance setting, and the lazy ray-tracing worker.
