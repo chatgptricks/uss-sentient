@@ -43,6 +43,13 @@ try {
   assert.ok(initial.triangles > 0, 'WebGL renders the pressure hull');
   assert.equal(initial.sky.backgroundType, 'CubeTexture', 'Distant stars use a translation-independent sky');
   assert.equal(initial.sky.pointClouds, 0, 'No nearby point-cloud stars can appear at the windows');
+  assert.equal(initial.lighting.quality, 'performance', 'Fresh desktop sessions use Performance by default');
+  assert.equal(initial.lighting.shadowsEnabled, false, 'Default exploration disables shadow rendering');
+  assert.equal(initial.lighting.ssaoEnabled, false, 'Default exploration disables ambient-occlusion passes');
+  assert.equal(initial.lighting.bloomEnabled, false, 'Default exploration disables bloom passes');
+  assert.equal(initial.lighting.shadowLights, 0, 'No default light requests shadow rendering');
+  assert.equal(initial.lighting.shadowMaps, 0, 'Default exploration allocates no shadow maps');
+  assert.ok(initial.lighting.shadowCasters > 20 && initial.lighting.shadowReceivers > 20, 'Hull and authored props support optional shadow quality');
   assert.equal(initial.importedStats.modelsLoaded, 19, 'Every authored GLB model loaded');
   assert.equal(loadedModelURLs.size, 19, 'The browser successfully fetched all 19 local GLBs');
   assert.equal(Object.keys(initial.importedStats.types).length, 19, 'All 19 model types are placed in the station');
@@ -236,6 +243,11 @@ try {
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByLabel('Graphics quality').selectOption('balanced');
   await page.getByLabel('Close dialog').click();
+  await page.waitForFunction(() => window.__SENTIENT__.snapshot().lighting.shadowMaps > 0);
+  const balanced = (await snapshot()).lighting;
+  assert.equal(balanced.quality, 'balanced');
+  assert.ok(balanced.shadowsEnabled && balanced.ssaoEnabled && balanced.bloomEnabled, 'Balanced quality remains available with optional effects');
+  assert.ok(balanced.shadowMaps <= balanced.shadowBudget, 'Opting into Balanced respects its shadow budget');
   await page.waitForFunction(() => !document.getElementById('toast').classList.contains('show'));
 
   for (const view of [
@@ -259,6 +271,9 @@ try {
   observeErrors(mobile);
   await mobile.goto(base);
   await mobile.waitForFunction(() => window.__SENTIENT__ && document.getElementById('loading').hidden);
+  const mobileLighting = await mobile.evaluate(() => window.__SENTIENT__.snapshot().lighting);
+  assert.equal(mobileLighting.quality, 'performance', 'Fresh mobile sessions also default to Performance');
+  assert.equal(mobileLighting.shadowMaps, 0);
   await mobile.screenshot({ path: 'test-results/arrival-mobile.png' });
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth === innerWidth), 'No horizontal mobile overflow');
   await mobile.getByRole('button', { name: 'ENTER THE STATION' }).tap();

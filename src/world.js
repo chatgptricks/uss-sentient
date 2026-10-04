@@ -3,10 +3,15 @@ import { MODULES, LINKS, modulePolygon } from './layout.js';
 import { createDetailKit } from './detail-kit.js';
 import { addHullDetails } from './hull-details.js';
 import { addDepartmentDetails } from './department-details.js';
+import { addLifeScienceDetails } from './life-science-details.js';
+import { addQuarterDetails } from './quarter-details.js';
 import { addSpaceEnvironment } from './space.js';
 import { addFinishDetails } from './finish-details.js';
 import { addScreenPanels } from './screen-panels.js';
 import { addImportedProps } from './imported-props.js';
+import { addFixtureDetails } from './fixture-details.js';
+import { createStationLighting } from './lighting.js';
+import { createHatchDesign } from './hatch-details.js';
 
 const LIME = 0xcfff04;
 const TAU = Math.PI * 2;
@@ -34,11 +39,11 @@ export async function createWorld(scene, rooms) {
   function endSection() { buildParent = root; kit.setParent(root); }
 
   const mat = options => { const material = new THREE.MeshStandardMaterial(options); materials.add(material); return material; };
-  const hull = mat({ color: 0xeeeFe6, roughness: .48, metalness: .22 });
-  const enamel = mat({ color: 0xf2eee1, roughness: .58, metalness: .1 });
+  const hull = mat({ color: 0xe5e5da, roughness: .62, metalness: .025 });
+  const enamel = mat({ color: 0xf2eee1, roughness: .52, metalness: .04 });
   const padding = mat({ color: 0xc4c5b8, roughness: .94, metalness: .02 });
   const seal = mat({ color: 0x182127, roughness: .79, metalness: .18 });
-  const graphite = mat({ color: 0x38434b, roughness: .49, metalness: .53 });
+  const graphite = mat({ color: 0x38434b, roughness: .54, metalness: .18 });
   const silver = mat({ color: 0x9eaaa8, roughness: .31, metalness: .79 });
   const accent = mat({ color: LIME, emissive: LIME, emissiveIntensity: .32, roughness: .6 });
   const whiteLight = mat({ color: 0xfff4d9, emissive: 0xfff4df, emissiveIntensity: 2.2 });
@@ -67,7 +72,9 @@ export async function createWorld(scene, rooms) {
     }
   });
   grain.wrapS = grain.wrapT = THREE.RepeatWrapping;
-  for (const material of [hull, enamel, padding]) { material.bumpMap = grain; material.bumpScale = .011; }
+  grain.colorSpace = THREE.NoColorSpace;
+  for (const material of [hull, enamel, padding]) { material.bumpMap = grain; material.bumpScale = .003; }
+  hull.roughnessMap = grain; enamel.roughnessMap = grain;
   const deckMap = texture(512, 512, ctx => {
     ctx.fillStyle = '#343b3e'; ctx.fillRect(0, 0, 512, 512);
     ctx.fillStyle = '#252e32'; ctx.fillRect(3, 3, 506, 506);
@@ -95,7 +102,7 @@ export async function createWorld(scene, rooms) {
     box(origin.x + x * c + z * s, y, origin.z - x * s + z * c, w, h, d, material, ry, rz);
   }
   function solidBox(parent, x, y, z, w, h, d, material) {
-    const mesh = new THREE.Mesh(unitBox, material); mesh.position.set(x, y, z); mesh.scale.set(w, h, d); parent.add(mesh); return mesh;
+    const mesh = new THREE.Mesh(unitBox, material); mesh.position.set(x, y, z); mesh.scale.set(w, h, d); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh;
   }
   function roundedRect(x, y, w, h, r, path = new THREE.Shape()) {
     path.moveTo(x + r, y); path.lineTo(x + w - r, y); path.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -111,8 +118,12 @@ export async function createWorld(scene, rooms) {
     return addMesh(geo, material, parent);
   }
   function textPlane(map, w, h, x, y, z, ry = 0, parent = buildParent) {
-    const material = new THREE.MeshBasicMaterial({ map, transparent: true, toneMapped: false }); materials.add(material);
-    const mesh = addMesh(new THREE.PlaneGeometry(w, h), material, parent); mesh.position.set(x, y, z); mesh.rotation.y = ry; return mesh;
+    const display = map.userData.emissiveDisplay;
+    const material = mat({ map, transparent: true, roughness: display ? .42 : .76, metalness: 0,
+      emissive: display ? 0xffffff : 0x000000, emissiveMap: display ? map : null, emissiveIntensity: display ? .85 : 0 });
+    const mesh = addMesh(new THREE.PlaneGeometry(w, h), material, parent);
+    mesh.castShadow = false; mesh.userData.excludeFromAO = true;
+    mesh.position.set(x, y, z); mesh.rotation.y = ry; return mesh;
   }
   function sign(title, sub = '', number = '') {
     return texture(768, 192, (ctx, w, h) => {
@@ -149,11 +160,15 @@ export async function createWorld(scene, rooms) {
       const len = Math.hypot(b.x - a.x, b.z - a.z), ry = -Math.atan2(b.z - a.z, b.x - a.x);
       // A gasket at the shoulder seam and short lamps in the angled ceiling.
       localBox(center, ry, 0, 2.56, .015, len, .055, .065, graphite);
-      if (i % 2 === 0) localBox(center, ry, 0, 2.85, .38, Math.min(1.25, len - .35), .065, .14, whiteLight);
+      if (i % 2 === 0) localBox(center, ry, 0, 2.85, (i===0||i===4?module.hz:module.hx)*.17+.16, Math.min(1.25, len - .35), .065, .14, whiteLight);
     }
     quadGeometry(quads, hull);
     const roofShape = new THREE.Shape(inner.map(p => new THREE.Vector2(p.x - module.x, -(p.z - module.z))));
-    const roof = addMesh(new THREE.ShapeGeometry(roofShape), enamel); roof.rotation.x = Math.PI / 2; roof.rotation.z = Math.PI; roof.position.set(module.x, 3.08, module.z);
+    const roof = addMesh(new THREE.ShapeGeometry(roofShape), enamel); roof.rotation.x = Math.PI / 2; roof.rotation.z = Math.PI; roof.position.set(module.x, 3.077, module.z);
+    // A sealed structural lid behind the finish prevents light entering through
+    // a paper-thin ceiling at the star's shallow angle of incidence.
+    const roofShell = addMesh(new THREE.ExtrudeGeometry(roofShape,{depth:.18,bevelEnabled:false}),hull);
+    roofShell.rotation.x = -Math.PI/2; roofShell.position.set(module.x,3.08,module.z);
     // Low-profile overhead service spine, broken up by recessed access tiles.
     box(module.x, 3.00, module.z, .86, .14, 2.9, seal);
     for (const dz of [-.93, 0, .93]) box(module.x, 2.90, module.z + dz, .72, .095, .80, padding);
@@ -184,6 +199,7 @@ export async function createWorld(scene, rooms) {
     const gasket = roundedFrame(width + .23, height + .2, .105, .25, .12, seal, group); gasket.position.z = .005;
     const metalFrame = roundedFrame(width + .37, height + .34, .085, .3, .105, silver, group); metalFrame.position.set(0, -.07, .085);
     const glassPane = addMesh(new THREE.PlaneGeometry(width + .03, height + .015), viewportGlass, group); glassPane.position.set(0, height / 2 + .1, -.11);
+    glassPane.castShadow = false; glassPane.userData.excludeFromAO = true;
     for (const side of [-1, 1]) solidBox(group, side * (width / 2 + .135), height / 2 + .1, .22, .045, height * .55, .07, enamel);
     if (bridge) {
       localBox(origin, ry, 0, .72, .18, width + .25, .15, .5, graphite);
@@ -250,6 +266,7 @@ export async function createWorld(scene, rooms) {
       ctx.fillStyle = '#728c89'; ctx.font = '400 19px Space, Arial'; ctx.fillText('PRESSURE STABLE    /    SYSTEM READY', 37, 535);
     });
     const forward = new THREE.Vector3(Math.sin(ry) * .21, 0, Math.cos(ry) * .21);
+    map.userData.emissiveDisplay = true;
     const screen = textPlane(map, .85, .6375, p.x + forward.x, 1.48, p.z + forward.z, ry);
     screen.userData.roomId = room.id; screen.userData.room = room; terminalMeshes.push(screen);
     colliders.push({ id: `terminal-${room.id}`, x: p.x, z: p.z, w: .76, d: .76 });
@@ -285,8 +302,6 @@ export async function createWorld(scene, rooms) {
       ctx.fillStyle = '#9daba6'; ctx.font = '400 22px Space, Arial'; ctx.fillText(`SENTIENT / ${deck}`, 256, 325);
     });
     const marker = textPlane(map, 1.25, 1.25, module.x, .008, module.z); marker.rotation.x = -Math.PI / 2;
-    const light = new THREE.PointLight(0xfff4dd, 12.0, 8.5, 2); light.position.set(module.x - .50, 2.65, module.z + .45); buildParent.add(light);
-    const fill = new THREE.PointLight(0xd6e6f0, 2.3, 4.8, 2); fill.position.set(module.x + module.hx * .55, 2.15, module.z - .2); buildParent.add(fill);
   }
 
   for (const module of MODULES) {
@@ -330,49 +345,55 @@ export async function createWorld(scene, rooms) {
       localBox(center, ry, 0, 2.57, offset, 1.48, .085, .095, silver);
       localBox(center, ry, 0, 2.505, offset + .33, .25, .035, .44, whiteLight);
     }
-    const light = new THREE.PointLight(0xeaf2fb, 3.3, 5.5, 2); light.position.set(center.x, 2.3, center.z); buildParent.add(light);
   }
 
-  function hatchLeaf(side, parent) {
-    const shape = new THREE.Shape(), r = .49, left = -.91, right = 0, bottom = .035, top = 2.32;
+  function hatchLeaf(side, parent, variant, number) {
+    const radius = { 'front-door': .38, archive: .23, floor: .15, lab: .49, commons: .60, forum: .25, bridge: .13 };
+    const shape = new THREE.Shape(), r = radius[variant] ?? .49, left = -.91, right = 0, bottom = .035, top = 2.32;
     const x = v => v * side;
     shape.moveTo(x(right), bottom); shape.lineTo(x(left + r), bottom); shape.quadraticCurveTo(x(left), bottom, x(left), bottom + r);
     shape.lineTo(x(left), top - r); shape.quadraticCurveTo(x(left), top, x(left + r), top);
     shape.lineTo(x(right), top); shape.closePath();
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth: .1, bevelEnabled: true, bevelSegments: 1, bevelSize: .016, bevelThickness: .012, curveSegments: 8 });
-    const mesh = addMesh(geometry, enamel, parent); mesh.position.z = -.055;
-    const xCenter = -.455 * side;
-    solidBox(parent, xCenter, 1.28, .064, .54, 1.35, .027, hull);
-    solidBox(parent, xCenter, 1.28, -.076, .54, 1.35, .027, hull);
-    for (const z of [-.10, .094]) {
-      solidBox(parent, -.13 * side, 1.05, z, .032, .32, .045, graphite);
-      solidBox(parent, -.45 * side, .50, z, .51, .075, .02, graphite);
-      solidBox(parent, -.02 * side, 1.4, z, .019, .81, .012, silver);
-      solidBox(parent, -.45 * side, .56, z, .25, .018, .014, accent);
+    if (variant === 'lab') {
+      const port = new THREE.Path(); port.absarc(-.465 * side, 1.47, .141, 0, TAU, true); shape.holes.push(port);
     }
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: .1, bevelEnabled: true, bevelSegments: 1, bevelSize: .016, bevelThickness: .012, curveSegments: 8 });
+    const surface = variant === 'bridge' ? seal : variant === 'archive' || variant === 'forum' ? graphite : enamel;
+    const mesh = addMesh(geometry, surface, parent); mesh.position.z = -.055;
+    parent.name = `${variant} / ${side > 0 ? 'left' : 'right'} pressure leaf`;
+    pressureHatch.design.leaf(side, parent, variant, number);
     return parent;
   }
 
   function pressureHatch(link, point, currentId, otherId, endpoint) {
+    pressureHatch.design ||= createHatchDesign({ kit, addMesh, texture, textPlane, materials: { hull, enamel, padding, seal, graphite, silver, accent, blueLight, glass } });
+    const design = pressureHatch.design;
+    const variant = link.from === 'bridge' || link.to === 'bridge' ? 'bridge' : currentId;
+    const number = rooms.find(room => room.id === variant).number;
     const axis = Math.abs(link.a.x - link.b.x) > .01 ? 'x' : 'z', ry = axis === 'x' ? Math.PI / 2 : 0;
     const group = new THREE.Group(); group.position.set(point.x, 0, point.z); group.rotation.y = ry; buildParent.add(group);
-    // Three nested collars create the thick, rounded pressure hatch profile.
-    const outer = roundedFrame(2.38, 2.68, .19, .65, .18, graphite, group); outer.position.set(0, -.07, -.1);
+    group.name = `${number} / ${variant} pressure hatch`;
+    // Outer silhouettes vary; the original inner gasket and aperture stay fixed.
+    design.collar(group, variant);
     const middle = roundedFrame(2.22, 2.55, .125, .60, .25, hull, group); middle.position.set(0, -.015, -.125);
     const gasket = roundedFrame(1.98, 2.40, .075, .52, .16, seal, group); gasket.position.set(0, .012, -.08);
     const left = new THREE.Group(), right = new THREE.Group(); group.add(left, right);
-    hatchLeaf(1, left); hatchLeaf(-1, right);
+    hatchLeaf(1, left, variant, number); hatchLeaf(-1, right, variant, number);
     // Tracks stay fixed above the sliding leaves; seam and handles move with them.
-    solidBox(group, 0, 2.46, .18, 1.65, .055, .055, silver);
-    solidBox(group, 0, 2.46, -.18, 1.65, .055, .055, silver);
+    kit.cuboid(0, 2.46, .18, 1.65, .055, .055, silver, 0, group);
+    kit.cuboid(0, 2.46, -.18, 1.65, .055, .055, silver, 0, group);
     const signalMaterial = new THREE.MeshBasicMaterial({ color: LIME }); materials.add(signalMaterial);
-    const signal = solidBox(group, 0, 2.55, .205, .57, .045, .03, signalMaterial);
-    solidBox(group, 0, 2.55, -.205, .57, .045, .03, signalMaterial);
+    const signalY = variant === 'bridge' ? 2.627 : 2.55, signalZ = variant === 'bridge' ? .27 : .205;
+    const signal = solidBox(group, 0, signalY, signalZ, .57, .045, .03, signalMaterial);
+    solidBox(group, 0, signalY, -signalZ, .57, .045, .03, signalMaterial);
     const current = MODULES.find(m => m.id === currentId), currentRoom = rooms.find(r => r.id === currentId), other = rooms.find(r => r.id === otherId);
     const frontIsInside = axis === 'x' ? current.x > point.x : current.z > point.z;
     const front = frontIsInside ? other : currentRoom, back = frontIsInside ? currentRoom : other;
-    textPlane(sign(front.shortName, 'AUTOMATIC PRESSURE HATCH', front.number), 1.08, .24, 0, 2.445, .215, 0, group);
-    textPlane(sign(back.shortName, 'AUTOMATIC PRESSURE HATCH', back.number), 1.08, .24, 0, 2.445, -.215, Math.PI, group);
+    if (variant !== 'bridge') {
+      textPlane(sign(front.shortName, 'AUTOMATIC PRESSURE HATCH', front.number), 1.08, .24, 0, 2.445, .215, 0, group);
+      textPlane(sign(back.shortName, 'AUTOMATIC PRESSURE HATCH', back.number), 1.08, .24, 0, 2.445, -.215, Math.PI, group);
+    }
+    design.frame(group, variant);
     // Collar feet define the true 1.82m clear opening inside the 2.25m tube.
     for (const side of [-1, 1]) {
       const dx = axis === 'z' ? side * 1.045 : 0, dz = axis === 'x' ? side * 1.045 : 0;
@@ -380,7 +401,7 @@ export async function createWorld(scene, rooms) {
     }
     const collider = { id: `door-${link.id}-${endpoint}`, x: point.x, z: point.z, w: axis === 'z' ? 1.85 : .18, d: axis === 'z' ? .18 : 1.85, disabled: false };
     colliders.push(collider);
-    const door = { id: `${link.id}-${endpoint}`, x: point.x, z: point.z, axis, openness: 0, collider, left, right, signal, holdUntil: 0 };
+    const door = { id: `${link.id}-${endpoint}`, variant, number, x: point.x, z: point.z, axis, openness: 0, collider, left, right, signal, holdUntil: 0 };
     doors.push(door);
   }
 
@@ -408,14 +429,13 @@ export async function createWorld(scene, rooms) {
   addHullDetails(detailContext);
   addDepartmentDetails(detailContext);
   addFinishDetails(detailContext);
+  const fixtureStats = addFixtureDetails(detailContext);
   const screenStats = addScreenPanels(detailContext);
   const importedStats = await addImportedProps(detailContext);
+  const lifeScienceStats = addLifeScienceDetails(detailContext);
+  const quarterStats = addQuarterDetails(detailContext);
   endSection();
 
-
-  const ambient = new THREE.HemisphereLight(0xe2ebf0, 0x4b5049, .56); root.add(ambient);
-  root.add(new THREE.AmbientLight(0xe8e4d7, .18));
-  const sunlight = new THREE.DirectionalLight(0xefffd4, 1.5); sunlight.position.set(5, 22, -80); root.add(sunlight);
 
   addSpaceEnvironment({scene,root,animated,texture,mat,addMesh,resourceMaterials:materials,resourceGeometries:geometries,resourceTextures:textures});
 
@@ -425,12 +445,27 @@ export async function createWorld(scene, rooms) {
     transforms.forEach((transform, i) => mesh.setMatrixAt(i, transform)); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
     mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh);
   }
+  let shadowCasters = 0, shadowReceivers = 0;
+  root.traverse(object => {
+    if (!object.isMesh) return;
+    const list = Array.isArray(object.material) ? object.material : [object.material];
+    if (list.every(material => material.transparent && material.opacity < .5)) {
+      object.castShadow = false; object.userData.excludeFromAO = true;
+    }
+    if (object.castShadow) shadowCasters++;
+    if (object.receiveShadow) shadowReceivers++;
+  });
+  const lighting = createStationLighting(root);
 
   return {
-    terminalMeshes, colliders, doors, detailStats, screenStats, importedStats,
+    terminalMeshes, colliders, doors, detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
+    setQuality: lighting.setQuality,
+    lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
     animate(time, dt = 1 / 60, player, motionScale = 1) {
       for (const update of animated) update(time * motionScale);
+      let movingHatch = false;
       for (const door of doors) {
+        const previous = door.openness;
         const distance = player ? Math.hypot(player.x - door.x, player.z - door.z) : Infinity;
         if (distance < 2.2) door.holdUntil = time + .9;
         const target = time < door.holdUntil ? 1 : 0;
@@ -440,9 +475,12 @@ export async function createWorld(scene, rooms) {
         door.left.position.x = -eased * .96; door.right.position.x = eased * .96;
         door.collider.disabled = door.openness > .82;
         door.signal.material.color.setHex(door.collider.disabled ? LIME : 0xd3ddcd);
+        if (Math.abs(previous-door.openness)>.00001) movingHatch = true;
       }
+      if (player) lighting.update(player,dt,movingHatch);
     },
     dispose() {
+      lighting.dispose();
       root.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
       scene.remove(root); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose());
     },

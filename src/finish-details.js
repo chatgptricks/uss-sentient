@@ -52,6 +52,7 @@ export function addFinishDetails(ctx) {
       g.strokeStyle='#b6d547';g.lineWidth=3;g.beginPath();for(let i=0;i<180;i++){const x=30+i*3.8,y=145+Math.sin(i*.12+index)*25+Math.sin(i*.81)*9;i?g.lineTo(x,y):g.moveTo(x,y);}g.stroke();
       g.font='400 19px Space';g.fillStyle='#dce8d5';g.fillText(index===0?'SOL / SENTIENT':index===1?'STABLE ORBIT':'ARRAY SYNC',756,91);g.fillStyle='#cfff04';g.font='500 35px Space';g.fillText(index===0?'98.7%':index===1?'071.4°':'LOCKED',756,141);g.font='400 13px Space';g.fillStyle='#819f96';g.fillText('LOCAL INSTRUMENT / NOMINAL',755,181);
     });
+    display.userData.emissiveDisplay = true;
     const center=kit.toWorld(origin,ry,[0,.84,.51]);
     kit.cuboid(center[0],center[1],center[2],index===0?2.75:1.50,.13,.35,M.graphite,ry);
     const screen=textPlane(display,index===0?2.6:1.35,index===0?.45:.30,center[0],.95,center[2],ry);

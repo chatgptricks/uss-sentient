@@ -27,3 +27,9 @@ Retrieved October 4, 2026 from the original creator, **Kenney**. These models ar
 Placements are fictional station hardware: computers, control consoles, monitors, secured cargo, communications units, generators and resource cartridges. Model names do not establish real Sentient products or operational data. Floor-mounted props receive physical collision bounds; high wall-mounted readouts preserve the walking routes. Kenney does not endorse or sponsor this project.
 
 Only the selected models, their one required texture and license texts are copied into the project. Source archives and unused pack content are not included in the shipped game.
+
+## Optional path tracing
+
+The still-view renderer uses [three-gpu-pathtracer 0.0.24](https://github.com/gkjohnson/three-gpu-pathtracer/tree/v0.0.24) and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), by Garrett Johnson, under the MIT license. Exact dependency versions are retained in the lockfile. The renderer is loaded only when requested; its scene snapshots convert instanced equipment to static geometry and bake the existing Sentient palette and star shader into compatible materials. This is progressive WebGL path tracing, not a claim of dedicated hardware RT acceleration.
+
+Plant geometry, laboratory instruments, strategy furniture, EVA gear and department-specific hatch treatments are authored procedurally for this game. They reuse station materials and batched geometry; they require no external 3D service.

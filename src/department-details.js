@@ -109,6 +109,7 @@ export function addDepartmentDetails(ctx) {
     const height = width * 720 / 1024;
     part(surface, 0, centerY, .229, width + .07, height + .07, .056, seal);
     const map = drawDisplay(room, paint);
+    map.userData.emissiveDisplay = true;
     const normal = new THREE.Vector3(Math.sin(surface.yaw), 0, Math.cos(surface.yaw));
     textPlane(map, width, height, surface.origin.x + normal.x * .263, centerY, surface.origin.z + normal.z * .263, surface.yaw);
     statistics.displays++;

@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { StationSSAOPass } from './contact-shading.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { rooms } from './rooms.js';
 import { createWorld } from './world.js';
@@ -33,7 +33,7 @@ const visited = readProgress(storage, rooms);
 let active = false, started = false, modal = null, target = rooms.find(r => !visited.has(r.id)) || rooms[0];
 let nearRoom = null, yaw = 0, pitch = 0, sensitivity = 1, elapsed = 0, bobTime = 0;
 let muted = true, audioContext, masterGain, toastTimer, lastSaveWarning = false;
-let quality = coarse ? 'performance' : 'balanced';
+let quality = 'performance';
 let eyeHeight = surfaceHeight(START) + 1.6;
 let position = { ...START }, keys = new Set(), drag = null, moveTouch = { x: 0, y: 0 };
 const walkable = createWalkable(rooms);
@@ -54,11 +54,13 @@ $('app').innerHTML = `
   <aside class="minimap-wrap"><div class="mini-heading"><span>STATION OVERVIEW</span><span>01—07</span></div><div class="mini-frame"><canvas id="minimap" width="350" height="350"></canvas><button class="map-open" id="mini-map-btn" aria-label="Open station map"></button></div><div class="mini-footer"><span><b>●</b> YOU</span><span id="discovered-label">0 / 7 CONNECTED</span></div></aside>
   <footer class="bottom-bar"><div class="controls"><div class="control"><span class="keygroup"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> MOVE</div><div class="control desktop-only"><kbd>↗</kbd> LOOK</div><div class="control desktop-only"><kbd>SHIFT</kbd> SPRINT</div><div class="control"><kbd>E</kbd> INTERACT</div><div class="control desktop-only"><kbd>ESC</kbd> PAUSE</div></div><div class="expedition-id"><span>NO SIGNAL TOO SMALL.</span><b>EXP. 001</b></div></footer>
   <div id="touch-controls" class="touch-controls"><div id="joystick" class="joystick" aria-label="Movement joystick"><span id="joystick-knob"></span></div><button id="touch-interact" class="touch-interact" aria-label="Interact with terminal">SCAN</button></div>
+  <aside id="photo-panel" class="photo-panel" hidden aria-label="Ray-traced still view"><div><div class="eyebrow">RAY-TRACED STILL VIEW</div><p id="photo-status" role="status">Preparing light paths</p><small>Camera paused · The image refines as light samples accumulate.</small></div><button id="photo-exit" class="primary">BACK TO EXPLORATION <kbd>ESC</kbd></button></aside>
   <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="modal-root" hidden></div>
   <div id="loading" class="loading"><img src="/brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
 `;
 
 let renderer, scene, camera, composer, bloom, ambientOcclusion, world;
+let photoState = 'idle', photoController, photoAbort, photoError = null, photoSession = 0;
 await Promise.all([document.fonts.load('400 16px Space'), document.fonts.load('500 16px Space')]).catch(() => {});
 try {
   renderer = new THREE.WebGLRenderer({ canvas: $('world'), antialias: true, powerPreference: 'high-performance' });
@@ -68,27 +70,17 @@ try {
   renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.info.autoReset = false;
   scene = new THREE.Scene();
   scene.background = new THREE.Color('#02080c');
   const lightingRoom = new RoomEnvironment(), pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(lightingRoom, .04).texture;
-  scene.environmentIntensity = .23;
+  scene.environmentIntensity = .10;
   lightingRoom.dispose(); pmrem.dispose();
   camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, .08, 1800);
   camera.rotation.order = 'YXZ';
   world = await createWorld(scene, rooms);
-  composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  ambientOcclusion = new SSAOPass(scene, camera, innerWidth, innerHeight, 16);
-  ambientOcclusion.kernelRadius = .30;
-  ambientOcclusion.minDistance = .000018;
-  ambientOcclusion.maxDistance = .00065;
-  composer.addPass(ambientOcclusion);
-  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .35, 1.2);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
   applyQuality();
   requestAnimationFrame(() => { $('loading').hidden = true; });
 } catch (error) {
@@ -99,16 +91,36 @@ try {
 }
 
 function applyQuality() {
-  const ratios = { performance: 1, balanced: 1.5, high: 2 };
+  const detailed = quality !== 'performance';
+  const ratios = { performance: 1, balanced: 1.25, high: 1.5 };
   renderer.setPixelRatio(Math.min(devicePixelRatio, ratios[quality]));
-  composer.setPixelRatio(renderer.getPixelRatio());
-  bloom.enabled = quality !== 'performance';
-  ambientOcclusion.enabled = quality !== 'performance';
-  renderer.shadowMap.enabled = quality !== 'performance';
+  renderer.shadowMap.enabled = detailed;
+  world.setQuality(quality);
   renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
-  const aoScale = quality === 'high' ? 1 : .65;
-  ambientOcclusion.setSize(Math.ceil(innerWidth*aoScale),Math.ceil(innerHeight*aoScale));
+  // The default mode allocates no bloom/AO render targets and draws the scene
+  // directly. Higher quality remains available when the hardware can afford it.
+  if (!detailed && composer) {
+    composer.passes.forEach(pass => pass.dispose?.()); composer.dispose();
+    composer = ambientOcclusion = bloom = null;
+  }
+  if (detailed && !composer) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    ambientOcclusion = new StationSSAOPass(scene, camera, innerWidth, innerHeight, 32);
+    composer.addPass(ambientOcclusion);
+    bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .15, .32, 1.35);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+  }
+  if (composer) {
+    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.setSize(innerWidth, innerHeight);
+    const aoScale = quality === 'high' ? .85 : .55;
+    ambientOcclusion.setSize(Math.ceil(innerWidth*aoScale), Math.ceil(innerHeight*aoScale));
+  }
+}
+function renderGame() {
+  if (composer) composer.render(); else renderer.render(scene, camera);
 }
 
 function notify(message) {
@@ -237,9 +249,47 @@ function openJournal() {
   document.querySelectorAll('[data-log]').forEach(button => { button.onclick = () => openTerminal(rooms.find(r => r.id === button.dataset.log)); });
 }
 
+function stopPhoto(resume = true) {
+  if (photoState === 'idle') return;
+  photoSession++;
+  photoAbort?.abort(); photoAbort = null;
+  photoController?.dispose(); photoController = null;
+  photoState = 'idle';
+  document.body.classList.remove('photo-mode'); $('photo-panel').hidden = true;
+  if (resume) enter(); else setActive(false);
+}
+
+async function startPhoto() {
+  if (photoState !== 'idle') return;
+  const session = ++photoSession;
+  if (modal) closeModal(false);
+  pause();
+  photoError = null; photoState = 'loading';
+  photoAbort = new AbortController();
+  const abort = photoAbort;
+  document.body.classList.add('photo-mode'); $('photo-panel').hidden = false;
+  $('photo-status').textContent = 'Loading ray tracer'; $('photo-exit').focus();
+  try {
+    const { createRaytracedView } = await import('./raytraced-view.js');
+    if (session !== photoSession) return;
+    const controller = await createRaytracedView({ renderer, scene, camera, signal: abort.signal,
+      onStatus: status => { if (session === photoSession) $('photo-status').textContent = status; },
+      rasterize: renderGame,
+    });
+    if (session !== photoSession) { controller.dispose(); return; }
+    photoController = controller; photoState = 'rendering';
+  } catch (error) {
+    if (session !== photoSession || error.name === 'AbortError') return;
+    photoError = error.message;
+    stopPhoto(false);
+    notify(`Ray-traced view unavailable: ${error.message} Exploration is ready.`);
+  }
+}
+
 function openSettings() {
   openModal('settings', 'Make yourself at home.', 'EXPEDITION SETTINGS',
-    `<div class="settings-row"><div>Graphics quality<small>Performance disables bloom and contact shading, and reduces pixel density.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>A quiet station hum and discovery tones.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Access terminal</span><b>E</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap SCAN near a terminal. This fictional station is based on Sentient's documented seven functional zones.</p>`);
+    `<div class="settings-row"><div>Graphics quality<small>Performance is the default: direct rendering with no shadow maps, bloom or contact shading.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>A quiet station hum and discovery tones.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="settings-row"><div>Ray-traced still view<small>Pause here to render soft shadows, reflections and bounced light. Refines over time.</small></div><button id="photo-start" class="icon-button">RENDER VIEW <kbd>R</kbd></button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Access terminal</span><b>E</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap SCAN near a terminal. This fictional station is based on Sentient's documented seven functional zones.</p>`);
+  $('photo-start').onclick = startPhoto;
   $('quality').value = quality;
   $('quality').onchange = event => { quality = event.target.value; applyQuality(); };
   $('sensitivity').oninput = event => { sensitivity = Number(event.target.value); };
@@ -372,6 +422,7 @@ function updateHUD() {
   if (modal === 'map' && $('deck-canvas')) renderMap($('deck-canvas'), true);
 }
 
+$('photo-exit').onclick = () => stopPhoto();
 $('start-btn').onclick = enter;
 $('reset-btn').onclick = () => {
   visited.clear(); position = { ...START }; yaw = 0; pitch = 0; target = rooms[0];
@@ -387,6 +438,13 @@ $('fullscreen-btn').onclick = async () => {
 };
 
 document.addEventListener('keydown', event => {
+  if (photoState !== 'idle') {
+    if (event.code === 'Tab') { event.preventDefault(); $('photo-exit').focus(); }
+    if (event.code === 'Escape' || event.code === 'KeyR') { event.preventDefault(); if (!event.repeat) stopPhoto(); }
+    return;
+  }
+  if (event.code === 'KeyR' && !event.repeat && !['INPUT','SELECT','TEXTAREA'].includes(event.target.tagName)) { event.preventDefault(); startPhoto(); return; }
+
   if (event.code === 'Tab' && modal) {
     const focusable = [...$('modal-root').querySelectorAll('button:not(:disabled),select,input')];
     const first = focusable[0], last = focusable.at(-1);
@@ -436,11 +494,26 @@ $('joystick').addEventListener('pointermove', event => { if (event.pointerId ===
 function releaseStick() { stickId = null; moveTouch = { x: 0, y: 0 }; $('joystick-knob').style.transform = ''; }
 $('joystick').addEventListener('pointerup', releaseStick); $('joystick').addEventListener('pointercancel', releaseStick);
 
-window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); applyQuality(); });
+window.addEventListener('resize', () => { if (photoState !== 'idle') stopPhoto(false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); applyQuality(); });
 updateProgress();
 let previous = performance.now(), hudTime = 0;
 renderer.setAnimationLoop(now => {
-  const dt = Math.min((now - previous) / 1000, .05); previous = now; elapsed += dt;
+  const dt = Math.min((now - previous) / 1000, .05); previous = now;
+  if (document.hidden) return;
+  if (photoState !== 'idle') {
+    if (photoController) {
+      try {
+        photoController.render();
+        const stats = photoController.stats();
+        $('photo-status').textContent = stats.compiling ? 'Compiling ray tracer' : `${Math.floor(stats.samples)} light samples · ${stats.bounces} bounces`;
+      } catch (error) {
+        photoError = error.message; stopPhoto(false);
+        notify(`Ray-traced view unavailable: ${error.message} Exploration is ready.`);
+      }
+    } else renderGame();
+    return;
+  }
+  elapsed += dt;
   if (active) updatePlayer(dt);
   else { eyeHeight = surfaceHeight(position)+1.6; camera.position.set(position.x, eyeHeight, position.z); }
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
@@ -449,13 +522,13 @@ renderer.setAnimationLoop(now => {
   if (hudTime > .065) { updateHUD(); hudTime = 0; }
   $('cycle').textContent = `07:${String(24 + Math.floor(elapsed / 60) % 36).padStart(2,'0')}:${String(Math.floor(elapsed) % 60).padStart(2,'0')}`;
   renderer.info.reset();
-  composer.render();
+  renderGame();
 });
 
 if (import.meta.env.DEV) {
   let pointClouds = 0; scene.traverse(object => { if (object.isPoints) pointClouds++; });
   window.__SENTIENT__ = {
-    snapshot: () => ({ active, started, modal, position: { ...position }, elevation: surfaceHeight(position), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: routeTo(position, target.id), doors: (world.doors || []).map(d => ({ id: d.id, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
+    snapshot: () => ({ raytrace: {state:photoState,error:photoError,...photoController?.stats()}, active, started, modal, position: { ...position }, elevation: surfaceHeight(position), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, lighting: {quality,shadowsEnabled:renderer.shadowMap.enabled,shadowMapType:renderer.shadowMap.type,ssaoEnabled:!!ambientOcclusion?.enabled,bloomEnabled:!!bloom?.enabled,...world.lightingStats()}, lifeScienceStats:world.lifeScienceStats, quarterStats:world.quarterStats, fixtureStats:world.fixtureStats, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: routeTo(position, target.id), doors: (world.doors || []).map(d => ({ id: d.id, variant:d.variant, number:d.number, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
     // Development-only positioning lets the browser test inspect every terminal.
     teleport: (x, z, facing = 0) => { position = { x, z }; eyeHeight = surfaceHeight(position)+1.6; yaw = facing; pitch = 0; },
     renderInfo: () => renderer.info,

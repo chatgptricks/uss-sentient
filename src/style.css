@@ -46,3 +46,8 @@ body.playing .route-guidance{display:flex}
 .deck-visual canvas{width:100%;height:auto;max-height:none;cursor:pointer}
 @media(max-width:700px){.deck-visual{display:flex;min-height:280px;max-height:280px}.deck-visual canvas{height:275px;width:auto;max-width:100%}}
 body:not(.playing) .location,body:not(.playing) .mission{display:none}
+
+/* A still camera lets progressive light paths accumulate without ghosting. */
+.photo-panel{position:fixed;z-index:50;bottom:28px;left:50%;transform:translateX(-50%);width:min(820px,calc(100% - 32px));display:flex;align-items:center;justify-content:space-between;gap:28px;padding:22px 26px;border:1px solid #71816b66;background:#091310ed;backdrop-filter:blur(15px);color:#eeefe7}
+.photo-panel[hidden]{display:none}.photo-panel p{font-size:20px;margin:8px 0}.photo-panel small{color:#a2b1a3;font-size:12px}.photo-panel .primary{flex-shrink:0;font-size:11px}.photo-mode #app>*:not(.photo-panel):not(.toast){visibility:hidden;pointer-events:none}.photo-mode #touch-controls{display:none}
+@media(max-width:600px){.photo-panel{bottom:16px;padding:18px;gap:18px;align-items:stretch;flex-direction:column}.photo-panel p{font-size:17px}.photo-panel .primary{justify-content:center}}
