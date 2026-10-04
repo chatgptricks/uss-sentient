@@ -39,7 +39,7 @@ Local brand marks are under `/Users/tbnalfaro/Developer/Codex Projects/19 Sentie
 
 ## Fiction and factual boundaries
 
-The USS Sentient, its orbit around a neon-lime star, station architecture, room coordinates, sci-fi designations, scan objectives and collectible signals are game fiction. The enclosed spacecraft uses off-white modules of different sizes in an asymmetric layout, with Sentient lime accents. The Front Door occupies an observation deck, with the star visible through windows. The station interprets the documented functional map; it does not represent a real facility or a verified organizational chart.
+The USS Sentient, its orbit around a neon-lime star, station architecture, room coordinates, sci-fi designations, scan objectives and collectible signals are game fiction. The enclosed spacecraft uses off-white modules of different sizes in an asymmetric layout, with Sentient lime accents. The Front Door is a compact arrival module. The Bridge contains the principal cupola view of the star, with small portholes elsewhere. The station interprets the documented functional map; it does not represent a real facility or a verified organizational chart.
 
 Tools listed in the game are sourced exhibits. Their inclusion does not claim a current public deployment, active integration or access to live company data. The account-deck directory and QR-generator recovery slot retain their documented placeholder nature. No July audience counts, service guarantees or dated deployment states are presented as current facts. The game does not connect to or alter company systems.
 
@@ -48,3 +48,12 @@ Room content is implemented in `src/rooms.js`. The original company projects wer
 ## Spacecraft layout references
 
 The user selected the ISS as the primary spatial reference, with the enclosed spacecraft feel of *Ender's Game* as a secondary direction. NASA's [Destiny module](https://www.nasa.gov/international-space-station/destiny-laboratory-module/) informed the enclosed equipment-rack modules; its [Cupola](https://www.nasa.gov/international-space-station/cupola/) informed framed observation windows. The game is an original fictional layout, not an ISS reconstruction. The current pass prioritizes opaque off-white pressure hulls, asymmetric circulation and star sightlines. Detailed art and surface treatment await the user's layout approval.
+
+
+### Modular rebuild / October 4, 2026
+
+The user supplied six visual references: enclosed off-white pressure tunnels, rounded split hatches, circular module junctions, ISS Cupola glazing, dark ribbed corridors, and a curved observation passage. These drive the updated spatial language: octagonal floor plans, a narrow usable aisle, sloping ceiling shoulders, solid hull panels, mechanical hatch frames, and small framed viewing apertures. Only the Bridge receives a larger observation view.
+
+The [Greg Berry film-art gallery for Ender's Game](https://www.gregberry1.com/film/enders-game) was inspected before the rebuild. Its corridor stills (07 and 08) show enclosed off-white hulls, thick structural ribs and integrated conduits. We use that construction language as reference, without reproducing a film set. NASA's [Destiny laboratory overview](https://www.nasa.gov/international-space-station/destiny-laboratory-module/) provides the human-scale module reference, while the [Cupola interior](https://www.nasa.gov/image-article/interior-view-from-international-space-station-cupola/) informs thick frames and limited observation glazing.
+
+The playable blockout uses 5.6–6.4-metre octagonal modules and 2.25-metre-wide connector shells. It is a fictional, walkable adaptation, with gravity and automatic sliding hatches for gameplay. It is not a dimensional or operational reconstruction of the ISS.

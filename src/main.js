@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { rooms } from './rooms.js';
 import { createWorld } from './world.js';
 import { START, createWalkable, movePlayer, readProgress } from './navigation.js';
+import { LINKS, modulePolygon, moduleAt, routeTo } from './layout.js';
 import './style.css';
 
 const icons = {
@@ -28,7 +29,7 @@ let storage;
 try { storage = window.localStorage; } catch { /* Private contexts may block access. */ }
 const visited = readProgress(storage, rooms);
 let active = false, started = false, modal = null, target = rooms.find(r => !visited.has(r.id)) || rooms[0];
-let nearRoom = null, yaw = 0.025, pitch = .055, sensitivity = 1, elapsed = 0, bobTime = 0;
+let nearRoom = null, yaw = 0, pitch = 0, sensitivity = 1, elapsed = 0, bobTime = 0;
 let muted = true, audioContext, masterGain, toastTimer, lastSaveWarning = false;
 let quality = coarse ? 'performance' : 'balanced';
 let position = { ...START }, keys = new Set(), drag = null, moveTouch = { x: 0, y: 0 };
@@ -36,7 +37,7 @@ const walkable = createWalkable(rooms);
 
 $('app').innerHTML = `
   <header class="topbar">
-    <div class="brand"><img src="/brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL LAYOUT PREVIEW / 0.1</span></div></div>
+    <div class="brand"><img src="/brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>MODULAR STATION / 0.2</span></div></div>
     <div class="top-actions"><div class="live-status"><i class="status-dot"></i> ALL SYSTEMS NOMINAL</div><button id="map-btn" class="icon-button" title="Deck map (M)" aria-label="Open deck map">${svg('map')}<span class="nav-label">DECK MAP</span><kbd>M</kbd></button><button id="journal-btn" class="icon-button" title="Expedition log (J)" aria-label="Open expedition log">${svg('book')}</button><button id="sound-btn" class="icon-button" title="Enable ambient audio" aria-label="Enable ambient audio" aria-pressed="false">${svg('mute')}</button><button id="settings-btn" class="icon-button" title="Settings" aria-label="Open settings">${svg('settings')}</button><button id="fullscreen-btn" class="icon-button" title="Fullscreen" aria-label="Toggle fullscreen">${svg('expand')}</button></div>
   </header>
   <div class="coordinates"><span>SECTOR 07</span><span class="slash">/</span><span>SENTIENT SYSTEM</span></div>
@@ -45,6 +46,7 @@ $('app').innerHTML = `
   <aside class="stellar"><div class="eyebrow">CURRENT ORBIT</div><h3>Sol Sentient</h3><p>STELLAR CLASS <span>NEON / LIME</span></p><p>ORBIT <span>STABLE</span></p><p>LOCAL CYCLE <span id="cycle">07:24:00</span></p><div class="bar"></div></aside>
   <aside id="mission" class="mission" hidden><div class="eyebrow">EXPEDITION 001</div><h2 id="mission-title">Connect the constellation</h2><p id="mission-copy">Find the department terminals. Collect seven signals to synchronize the station.</p><div class="progress-track"><span id="progress"></span></div><div class="mission-bottom"><span>STATION SYNCHRONIZATION</span><b id="progress-label">0 / 7</b></div></aside>
   <div id="crosshair" class="crosshair" hidden></div><button id="interact" class="interact" hidden><kbd>E</kbd><span id="interact-label">ACCESS TERMINAL</span></button><div id="waypoint" class="waypoint" hidden><div class="diamond"></div><span id="waypoint-label"></span></div>
+  <div class="route-guidance"><span id="route-arrow">↑</span><div><small id="route-step">FOLLOW THE HATCHES</small><b id="route-destination">FRONT DOOR</b></div><kbd>M</kbd></div>
   <div class="location"><div class="eyebrow">YOU ARE HERE <span id="location-deck">/ DECK 01</span></div><h2><span id="location-number">01</span><span id="location-name" style="font:inherit;color:inherit;margin:0">The Front Door</span></h2><p id="location-function">Arrival & network observatory</p></div>
   <aside class="minimap-wrap"><div class="mini-heading"><span>STATION OVERVIEW</span><span>01—07</span></div><div class="mini-frame"><canvas id="minimap" width="350" height="350"></canvas><button class="map-open" id="mini-map-btn" aria-label="Open station map"></button></div><div class="mini-footer"><span><b>●</b> YOU</span><span id="discovered-label">0 / 7 CONNECTED</span></div></aside>
   <footer class="bottom-bar"><div class="controls"><div class="control"><span class="keygroup"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> MOVE</div><div class="control desktop-only"><kbd>↗</kbd> LOOK</div><div class="control desktop-only"><kbd>SHIFT</kbd> SPRINT</div><div class="control"><kbd>E</kbd> INTERACT</div><div class="control desktop-only"><kbd>ESC</kbd> PAUSE</div></div><div class="expedition-id"><span>NO SIGNAL TOO SMALL.</span><b>EXP. 001</b></div></footer>
@@ -194,12 +196,20 @@ function interact() {
 
 function openMap() {
   openModal('map', 'Find your next discovery.', 'USS SENTIENT / DECK DIRECTORY',
-    `<p class="modal-intro">Seven connected departments. Select a destination to place a navigation beacon.</p><div class="deck-layout"><div class="deck-visual"><canvas id="deck-canvas" width="560" height="720" aria-label="Station floor plan"></canvas></div><div class="room-list">${rooms.map(r => `<button class="room-row ${target.id === r.id ? 'selected' : ''}" data-destination="${r.id}" aria-label="Navigate to ${esc(r.name)}"><span class="num">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${esc(r.function)}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '↗'}</span></button>`).join('')}</div></div>`, `<span class="eyebrow">${visited.size} OF 7 SIGNALS CONNECTED</span><span class="eyebrow" style="color:#cfff04">● YOU &nbsp; ◇ DESTINATION</span>`);
+    `<p class="modal-intro">Choose a department. The lime route guides you through the connecting hatches, which open as you approach.</p><div class="deck-layout"><div class="deck-visual"><canvas id="deck-canvas" width="560" height="720" aria-label="Station floor plan with your position and route"></canvas></div><div class="room-list">${rooms.map(r => `<button class="room-row ${target.id === r.id ? 'selected' : ''}" data-destination="${r.id}" aria-label="Navigate to ${esc(r.name)}"><span class="num">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${esc(r.function)}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '↗'}</span></button>`).join('')}</div></div>`, `<span class="eyebrow">${visited.size} OF 7 SIGNALS CONNECTED</span><span class="eyebrow" style="color:#cfff04">● YOU &nbsp; ━ ROUTE &nbsp; ◇ DESTINATION</span>`);
   renderMap($('deck-canvas'), true);
+  $('deck-canvas').onclick = event => {
+    const canvas = event.currentTarget, bounds = canvas.getBoundingClientRect();
+    const scale = Math.min((canvas.width-35)/29,(canvas.height-40)/39);
+    const x = ((event.clientX-bounds.left)/bounds.width*canvas.width-canvas.width/2)/scale;
+    const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-15;
+    const module = moduleAt({x,z});
+    if (module) { target = rooms.find(r => r.id===module.id); notify(`Route set: ${target.name}. Follow the lime arrow.`); closeModal(); }
+  };
   document.querySelectorAll('[data-destination]').forEach(button => {
     button.onclick = () => {
       target = rooms.find(r => r.id === button.dataset.destination);
-      notify(`Navigation beacon set: ${target.name}. Follow the lime marker.`);
+      notify(`Route set: ${target.name}. Follow the lime arrow.`);
       closeModal();
     };
   });
@@ -258,59 +268,78 @@ function playChime() {
 function renderMap(canvas, large = false) {
   const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  const scale = Math.min((width - 35) / 78, (height - 30) / 107);
+  const scale = Math.min((width - 35) / 29, (height - 40) / 39);
   const px = x => width / 2 + x * scale;
-  const pz = z => height / 2 + (z + 11.5) * scale;
+  const pz = z => height / 2 + (z + 15) * scale;
   ctx.strokeStyle = '#63855820'; ctx.lineWidth = 1;
   for (let x = 0; x < width; x += 22) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
   for (let y = 0; y < height; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
-  ctx.fillStyle = '#53714a23'; ctx.strokeStyle = '#a1bd8555';
-  for (const area of walkable) { ctx.fillRect(px(area.x - area.w / 2), pz(area.z - area.d / 2), area.w * scale, area.d * scale); ctx.strokeRect(px(area.x - area.w / 2), pz(area.z - area.d / 2), area.w * scale, area.d * scale); }
+  ctx.lineCap = 'butt';
+  for (const link of LINKS) {
+    ctx.beginPath(); ctx.moveTo(px(link.a.x),pz(link.a.z)); ctx.lineTo(px(link.b.x),pz(link.b.z));
+    ctx.strokeStyle = '#78978165'; ctx.lineWidth = link.width * scale; ctx.stroke();
+    ctx.strokeStyle = '#152922'; ctx.lineWidth = (link.width-.2) * scale; ctx.stroke();
+  }
   for (const room of rooms) {
-    const width = ((room.w || 22) - 2) * scale, depth = ((room.d || 18) - 2) * scale;
-    ctx.fillStyle = visited.has(room.id) ? '#cfff041c' : '#07180edb'; ctx.strokeStyle = target.id === room.id ? '#cfff04' : visited.has(room.id) ? '#89b43d80' : '#60785290'; ctx.lineWidth = target.id === room.id ? 1.5 : 1;
-    ctx.fillRect(px(room.x) - width / 2, pz(room.z) - depth / 2, width, depth); ctx.strokeRect(px(room.x) - width / 2, pz(room.z) - depth / 2, width, depth);
-    ctx.font = `${large ? 15 : 16}px Space, sans-serif`; ctx.fillStyle = visited.has(room.id) ? '#cfff04' : '#b2c89e'; ctx.textAlign = 'center'; ctx.fillText(room.number, px(room.x), pz(room.z) + 5);
-    if (large && room.id !== 'front-door') { ctx.font = '11px Space, sans-serif'; ctx.fillStyle = '#a0b194'; ctx.fillText(room.shortName.toUpperCase(), px(room.x), pz(room.z) + 22); }
+    const points = modulePolygon(room);
+    ctx.beginPath(); points.forEach((p,i) => i ? ctx.lineTo(px(p.x),pz(p.z)) : ctx.moveTo(px(p.x),pz(p.z))); ctx.closePath();
+    ctx.fillStyle = visited.has(room.id) ? '#2c3820' : '#101d19'; ctx.strokeStyle = target.id === room.id ? '#cfff04' : '#789781'; ctx.lineWidth = target.id === room.id ? 2 : 1;
+    ctx.fill(); ctx.stroke();
+  }
+  const route = [position, ...routeTo(position,target.id)];
+  ctx.beginPath(); route.forEach((p,i) => i ? ctx.lineTo(px(p.x),pz(p.z)) : ctx.moveTo(px(p.x),pz(p.z)));
+  ctx.strokeStyle = '#cfff04'; ctx.lineWidth = large ? 2.5 : 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  for (const link of LINKS) for (const p of [link.a,link.b]) {
+    ctx.fillStyle = '#d9ddd0';
+    ctx.fillRect(px(p.x)-(link.a.x===link.b.x?3:1),pz(p.z)-(link.a.x===link.b.x?1:3),link.a.x===link.b.x?6:2,link.a.x===link.b.x?2:6);
+  }
+  for (const room of rooms) {
+    ctx.textAlign = 'center'; ctx.font = `${large ? 22 : 19}px Space, sans-serif`;
+    ctx.fillStyle = target.id === room.id ? '#cfff04' : '#f5f5ef';
+    ctx.fillText(room.number,px(room.x),pz(room.z)-3);
+    ctx.font = `${large ? 15 : 10}px Space, sans-serif`; ctx.fillStyle = '#c7d0c9';
+    if (large) ctx.fillText(room.shortName.toUpperCase(),px(room.x),pz(room.z)+16);
   }
   ctx.save(); ctx.translate(px(position.x), pz(position.z)); ctx.rotate(-yaw);
-  ctx.fillStyle = '#cfff0418'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 23, -Math.PI / 2 - .5, -Math.PI / 2 + .5); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#e7ffb6'; ctx.shadowColor = '#cfff04'; ctx.shadowBlur = 9; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4, 4); ctx.lineTo(0, 2); ctx.lineTo(-4, 4); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.fillStyle = '#cfff0428'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 23, -Math.PI / 2 - .5, -Math.PI / 2 + .5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#cfff04'; ctx.shadowBlur = 9; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(0, 2); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
 }
 
 function updatePlayer(dt) {
   const inputX = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + moveTouch.x;
   const inputZ = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) + moveTouch.y;
   const length = Math.max(1, Math.hypot(inputX, inputZ));
-  const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 8.5 : 4.8) * dt;
+  const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 4.2 : 2.5) * dt;
   const dx = (inputX * Math.cos(yaw) + inputZ * Math.sin(yaw)) / length * speed;
   const dz = (-inputX * Math.sin(yaw) + inputZ * Math.cos(yaw)) / length * speed;
   position = movePlayer(position, dx, dz, walkable, world.colliders || []);
   if (Math.abs(dx) + Math.abs(dz) > .001) bobTime += dt * 9;
   const bob = reduced ? 0 : Math.sin(bobTime) * .022 * Math.min(1, Math.hypot(inputX, inputZ));
-  camera.position.set(position.x, 1.8 + bob, position.z);
+  camera.position.set(position.x, 1.6 + bob, position.z);
 }
 
 const markerPoint = new THREE.Vector3(), direction = new THREE.Vector3();
 function updateHUD() {
-  let room = rooms.find(r => r.id !== 'front-door' && Math.abs(position.x - r.x) < r.w / 2 && Math.abs(position.z - r.z) < r.d / 2);
-  if (!room && position.z <= -44) room = rooms[0];
-  $('location-name').textContent = room ? room.name : 'The Concourse';
+  const module = moduleAt(position);
+  const room = rooms.find(r => r.id === module?.id);
+  $('location-name').textContent = room ? room.name : 'Pressure tunnel';
   $('location-number').textContent = room ? room.number : '↗';
-  $('location-function').textContent = room ? room.designation : 'Department transit / observation gallery';
+  $('location-function').textContent = room ? room.designation : 'Module transit / automatic hatches';
   const degrees = (Math.round(-yaw * 180 / Math.PI) % 360 + 360) % 360;
   const cardinal = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
   $('heading').textContent = `${String(degrees).padStart(3, '0')}° ${cardinal}`;
-  nearRoom = rooms.find(r => Math.hypot(position.x - r.x, position.z - (r.z - 3)) < 3.4) || null;
+  nearRoom = rooms.find(r => Math.hypot(position.x - r.terminal.x, position.z - r.terminal.z) < 1.5) || null;
   $('interact').hidden = !active || !nearRoom;
   $('crosshair').classList.toggle('near', !!nearRoom);
   if (nearRoom) $('interact-label').textContent = `${visited.has(nearRoom.id) ? 'REVISIT' : 'SCAN'} ${nearRoom.shortName.toUpperCase()}`;
-  const distance = Math.hypot(position.x - target.x, position.z - target.z);
-  // Route via the concourse instead of sending the explorer through walls.
-  let tx = target.x, tz = target.z - 3;
-  if (Math.abs(position.x) > 6 && (!room || room.id !== target.id)) { tx = 0; tz = room?.z ?? position.z; }
-  else if (Math.abs(position.z - target.z) > 2.2 && target.id !== 'front-door' && Math.abs(position.x) < 11) { tx = 0; tz = target.z; }
-  markerPoint.set(tx, 2.3, tz);
+  const route = routeTo(position, target.id);
+  const next = route[0] || target.approach;
+  const distance = [position,...route].reduce((sum,p,i,all) => i ? sum + Math.hypot(p.x-all[i-1].x,p.z-all[i-1].z) : 0, 0);
+  const bearing = Math.atan2(next.x-position.x, -(next.z-position.z)) + yaw;
+  $('route-arrow').style.transform = `rotate(${bearing}rad)`;
+  $('route-destination').textContent = `${target.shortName.toUpperCase()} · ${Math.ceil(distance)} m`;
+  $('route-step').textContent = nearRoom?.id === target.id ? 'PRESS E TO CONNECT' : room?.id === target.id ? 'DEPARTMENT TERMINAL' : 'FOLLOW THE HATCHES';
+  markerPoint.set(next.x, 1.5, next.z);
   direction.copy(markerPoint).sub(camera.position);
   const inFront = direction.dot(camera.getWorldDirection(new THREE.Vector3())) > 0;
   markerPoint.project(camera);
@@ -323,7 +352,7 @@ function updateHUD() {
 
 $('start-btn').onclick = enter;
 $('reset-btn').onclick = () => {
-  visited.clear(); position = { ...START }; yaw = .025; pitch = .055; target = rooms[0];
+  visited.clear(); position = { ...START }; yaw = 0; pitch = 0; target = rooms[0];
   try { localStorage.removeItem('uss-sentient-expedition-v1'); } catch { /* Session still resets. */ }
   updateProgress(); enter(); notify('New expedition started. First stop: the Front Door.');
 };
@@ -391,9 +420,9 @@ let previous = performance.now(), hudTime = 0;
 renderer.setAnimationLoop(now => {
   const dt = Math.min((now - previous) / 1000, .05); previous = now; elapsed += dt;
   if (active) updatePlayer(dt);
-  else camera.position.set(position.x, 1.8, position.z);
+  else camera.position.set(position.x, 1.6, position.z);
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  world.animate?.(reduced ? elapsed * .15 : elapsed, dt);
+  world.animate?.(reduced ? elapsed * .15 : elapsed, dt, position);
   hudTime += dt;
   if (hudTime > .065) { updateHUD(); hudTime = 0; }
   $('cycle').textContent = `07:${String(24 + Math.floor(elapsed / 60) % 36).padStart(2,'0')}:${String(Math.floor(elapsed) % 60).padStart(2,'0')}`;
@@ -403,7 +432,7 @@ renderer.setAnimationLoop(now => {
 
 if (import.meta.env.DEV) {
   window.__SENTIENT__ = {
-    snapshot: () => ({ active, started, modal, position: { ...position }, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, colliders: world.colliders || [] }),
+    snapshot: () => ({ active, started, modal, position: { ...position }, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: routeTo(position, target.id), doors: (world.doors || []).map(d => ({ id: d.id, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
     // Development-only positioning lets the browser test inspect every terminal.
     teleport: (x, z, facing = 0) => { position = { x, z }; yaw = facing; pitch = 0; },
     renderInfo: () => renderer.info,

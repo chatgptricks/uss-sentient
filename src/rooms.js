@@ -1,3 +1,4 @@
+import { MODULES } from './layout.js';
 // Sentient's documented seven functional zones, adapted into fictional station rooms.
 // Provenance and adaptation boundaries: docs/SENTIENT-RESEARCH.md.
 export const rooms = [
@@ -13,10 +14,6 @@ export const rooms = [
       { name: 'Sentient Accounts', description: 'A visual account network with portfolio metrics, profile detail and performance context.' },
       { name: 'Flagship Accounts', description: 'The public Sentient story introduces its media properties and client network here.' },
     ],
-    x: 0,
-    z: -52,
-    w: 24,
-    d: 18,
     mission: 'Scan the arrival terminal to establish the station network link.',
     signal: 'Network',
   },
@@ -39,10 +36,6 @@ export const rooms = [
       { name: 'Battle Giveaway', description: 'An Instagram utility included in the original Hub inventory.' },
       { name: 'QR Code Generator', description: 'A recovery slot in the original Hub inventory for a requested utility.' },
     ],
-    x: -23,
-    z: 15,
-    w: 24,
-    d: 20,
     mission: 'Scan the production terminal to synchronize the creative signal.',
     signal: 'Creation',
   },
@@ -62,10 +55,6 @@ export const rooms = [
       { name: 'BCCR FX Intelligence', description: 'Reference-rate tracking and economic trend context.' },
       { name: 'Slack Link Catcher', description: 'Knowledge intake with captured links, notes, categories and reminders.' },
     ],
-    x: -22,
-    z: -12,
-    w: 22,
-    d: 18,
     mission: 'Scan the archive terminal to recover the station intelligence signal.',
     signal: 'Insight',
   },
@@ -82,10 +71,6 @@ export const rooms = [
       { name: 'Creator Network', description: 'The public company story groups creator relationships and distribution examples here.' },
       { name: 'Platform Constellation', description: 'Instagram, X, LinkedIn, TikTok and YouTube are represented in the public network story.' },
     ],
-    x: 23,
-    z: 23,
-    w: 24,
-    d: 16,
     mission: 'Scan the commons terminal to connect the collaboration signal.',
     signal: 'Connection',
   },
@@ -103,10 +88,6 @@ export const rooms = [
       { name: 'Content Formats', description: 'The format system spanning carousels, talking-head videos, Faceless 2.0 and reels.' },
       { name: 'People & Presence', description: 'The public website introduces the founders, team and agency mission in this room.' },
     ],
-    x: 22,
-    z: -3,
-    w: 20,
-    d: 16,
     mission: 'Scan the forum terminal to align the station strategy signal.',
     signal: 'Strategy',
   },
@@ -125,10 +106,6 @@ export const rooms = [
       { name: 'Distribution', description: 'The public campaign process includes planned audience distribution.' },
       { name: 'Track & Scale', description: 'Performance data informs the next campaign decisions.' },
     ],
-    x: -21,
-    z: -36,
-    w: 20,
-    d: 16,
     mission: 'Scan the lab terminal to stabilize the experimental signal.',
     signal: 'Innovation',
   },
@@ -145,11 +122,10 @@ export const rooms = [
       { name: 'Strategy Intake', description: 'The public website routes project goals into campaigns, growth systems, community or consulting.' },
       { name: 'Leadership & Portfolio', description: 'The documented Hub function brings operational visibility to the people steering the work.' },
     ],
-    x: 24,
-    z: -29,
-    w: 26,
-    d: 20,
     mission: 'Scan the command terminal to complete the leadership signal.',
     signal: 'Direction',
   },
-];
+].map(room => {
+  const module = MODULES.find(m => m.id === room.id);
+  return { ...room, ...module, w: module.a * 2, d: module.a * 2 };
+});

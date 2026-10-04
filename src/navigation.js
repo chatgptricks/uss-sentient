@@ -1,18 +1,14 @@
-export const PLAYER_RADIUS = 0.34;
-export const START = { x: 0, z: -44 };
+import { MODULES, LINKS, modulePolygon, insidePolygon } from './layout.js';
 
-export function createWalkable(rooms) {
+export const PLAYER_RADIUS = 0.28;
+export const START = { x: 0, z: 1.3 };
+
+export function createWalkable() {
   return [
-    { x: 0, z: -4, w: 12, d: 86 },
-    { x: 0, z: -53, w: 24, d: 18 },
-    ...rooms.filter(r => r.id !== 'front-door').flatMap(r => {
-      const width = r.w || 22, depth = r.d || 18;
-      const inner = Math.abs(r.x) - width / 2;
-      return [
-        { x: r.x, z: r.z, w: width, d: depth },
-        { x: Math.sign(r.x) * (6 + inner) / 2, z: r.z, w: inner - 6 + .2, d: 4.8 },
-      ];
-    }),
+    ...MODULES.map(m => ({ id: m.id, points: modulePolygon(m), x: m.x, z: m.z })),
+    ...LINKS.map(l => ({ id: l.id, x: (l.a.x+l.b.x)/2, z: (l.a.z+l.b.z)/2,
+      w: Math.abs(l.a.x-l.b.x) + (l.a.x===l.b.x ? 1.8 : .12),
+      d: Math.abs(l.a.z-l.b.z) + (l.a.z===l.b.z ? 1.8 : .12) })),
   ];
 }
 
@@ -23,9 +19,9 @@ export function canWalk(x, z, areas, colliders = []) {
     const angle = i * Math.PI / 4;
     const px = x + Math.cos(angle) * radius;
     const pz = z + Math.sin(angle) * radius;
-    if (!areas.some(a => Math.abs(px - a.x) <= a.w / 2 && Math.abs(pz - a.z) <= a.d / 2)) return false;
+    if (!areas.some(a => a.points ? insidePolygon(px, pz, a.points) : Math.abs(px - a.x) <= a.w / 2 && Math.abs(pz - a.z) <= a.d / 2)) return false;
   }
-  return !colliders.some(c => Math.abs(x - c.x) < c.w / 2 + radius && Math.abs(z - c.z) < c.d / 2 + radius);
+  return !colliders.some(c => !c.disabled && Math.abs(x - c.x) < c.w / 2 + radius && Math.abs(z - c.z) < c.d / 2 + radius);
 }
 
 export function movePlayer(position, dx, dz, areas, colliders = []) {

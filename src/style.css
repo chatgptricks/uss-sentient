@@ -24,3 +24,25 @@
 .topbar{background:linear-gradient(#07100ff5,#07100fc9)}
 .bottom-bar{background:#07100fdc}.coordinates{padding:5px 8px;background:#07100f99}.compass{padding:5px 10px;background:#07100f99}
 @media(max-width:700px){.welcome{background:none}.welcome:before{inset:-4px -6px -4px -6px;background:#07100fe8}.location{max-width:205px}.minimap-wrap{width:104px}}
+
+/* Keep the pressure hull in view while walking. Navigation stays at the edges. */
+body.playing .stellar,body.playing .coordinates{display:none}
+body.playing .mission{top:105px;padding:13px 17px;width:215px;background:#0b1115bd;backdrop-filter:blur(8px)}
+body.playing .mission h2{font-size:13px;margin:7px 0}
+body.playing .mission p{display:none}
+body.playing .mission .progress-track{margin-top:10px}
+body.playing .mission-bottom{font-size:8px}
+body.playing .location{padding:14px 18px;background:#0b1115b3;border-left:2px solid #cfff04;backdrop-filter:blur(8px)}
+body.playing .location h2{font-size:21px}
+.route-guidance{display:none;position:absolute;bottom:90px;left:50%;transform:translateX(-50%);align-items:center;gap:14px;padding:12px 18px;background:#0b1115d9;border:1px solid #d6e1d222;pointer-events:none}
+body.playing .route-guidance{display:flex}
+.route-guidance>span{font-size:27px;color:var(--lime);width:25px;text-align:center}
+.route-guidance small{display:block;font-size:8px;letter-spacing:1.5px;color:#a3ada7;margin-bottom:5px}
+.route-guidance b{font-size:10px;letter-spacing:1px;font-weight:400;color:#f5f5ef}
+.route-guidance kbd{font:10px Space;border:1px solid #ffffff40;padding:5px}
+.deck-visual{background:#09100f;border:1px solid #ffffff14}
+@media(max-width:700px){body.playing .mission{top:115px;left:18px;width:178px;padding:9px 12px}body.playing .mission .eyebrow{display:none}body.playing .mission h2{font-size:11px}body.playing .location{padding:9px 11px}.deck-visual{display:block;max-height:280px}.deck-visual canvas{height:275px;width:100%;object-fit:contain}.route-guidance{bottom:78px;padding:9px 13px;max-width:80vw;white-space:nowrap}.route-guidance kbd{display:none}}
+@media(pointer:coarse){body.playing .route-guidance{bottom:175px}body.playing .location{bottom:220px}}
+.deck-visual canvas{width:100%;height:auto;max-height:none;cursor:pointer}
+@media(max-width:700px){.deck-visual{display:flex;min-height:280px;max-height:280px}.deck-visual canvas{height:275px;width:auto;max-width:100%}}
+body:not(.playing) .location,body:not(.playing) .mission{display:none}

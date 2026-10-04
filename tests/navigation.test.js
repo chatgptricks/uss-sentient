@@ -1,104 +1,144 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rooms } from '../src/rooms.js';
+import { MODULES, LINKS, modulePolygon, insidePolygon, routeTo } from '../src/layout.js';
 import { PLAYER_RADIUS, START, createWalkable, canWalk, movePlayer, readProgress } from '../src/navigation.js';
 
 const areas = createWalkable(rooms);
 
-function walkTo(from, destination) {
+function walkTo(from, destination, colliders = []) {
   let position = { ...from };
-  for (let frame = 0; frame < 1200; frame++) {
-    const dx = destination.x - position.x;
-    const dz = destination.z - position.z;
+  for (let frame = 0; frame < 1000; frame++) {
+    const dx = destination.x - position.x, dz = destination.z - position.z;
     const distance = Math.hypot(dx, dz);
     if (distance < 0.001) return position;
-    const step = Math.min(distance, 0.24);
-    position = movePlayer(position, dx / distance * step, dz / distance * step, areas);
-    assert.ok(canWalk(position.x, position.z, areas), 'Every simulated movement frame stays inside the station');
+    const step = Math.min(distance, 0.12);
+    position = movePlayer(position, dx / distance * step, dz / distance * step, areas, colliders);
+    assert.ok(canWalk(position.x, position.z, areas, colliders), 'Every route movement frame remains inside the pressure hull');
   }
-  assert.fail(`Route became stuck approaching (${destination.x}, ${destination.z}) from (${position.x}, ${position.z})`);
+  assert.fail(`Blocked route to (${destination.x},${destination.z}) at (${position.x},${position.z})`);
 }
 
-test('all seven rooms can be visited and exited from the observation-deck entrance', () => {
+test('all seven compact modules and their terminal approaches match the shared hull plan', () => {
   assert.equal(rooms.length, 7);
+  assert.equal(new Set(rooms.map(room => room.id)).size, 7);
   assert.ok(canWalk(START.x, START.z, areas));
   for (const room of rooms) {
-    let position = walkTo(START, { x: 0, z: room.z });
-    position = walkTo(position, { x: room.x, z: room.z });
-    // Reach the far half of each room, then retrace the doorway to the starting deck.
-    position = walkTo(position, { x: room.x, z: room.z - 5 });
-    position = walkTo(position, { x: room.x, z: room.z });
-    position = walkTo(position, { x: 0, z: room.z });
-    position = walkTo(position, START);
-    assert.ok(Math.hypot(position.x - START.x, position.z - START.z) < 0.001, room.name);
+    const module = MODULES.find(module => module.id === room.id);
+    assert.deepEqual([room.x, room.z, room.terminal, room.approach], [module.x, module.z, module.terminal, module.approach]);
+    assert.equal(modulePolygon(module).length, 8);
+    assert.ok(insidePolygon(module.approach.x, module.approach.z, modulePolygon(module)));
+    assert.ok(canWalk(room.approach.x, room.approach.z, areas));
   }
 });
 
-test('doorway seams are traversable on both sides of all six side rooms', () => {
-  for (const room of rooms.filter(room => room.x !== 0)) {
-    const direction = Math.sign(room.x);
-    const innerWall = Math.abs(room.x) - room.w / 2;
-    const connectorCenter = (6 + innerWall) / 2;
-    for (const distance of [5.5, 5.9, 6.1, connectorCenter, innerWall - 0.1, innerWall + 0.1, innerWall + 0.5]) {
-      assert.ok(canWalk(direction * distance, room.z, areas), `${room.name}: seam at ${direction * distance}`);
+test('every module is independently reachable through the compact floor plan', () => {
+  const step = 0.25, queue = [{ x: 0, z: 0 }], seen = new Set(['0,0']);
+  for (let i = 0; i < queue.length; i++) {
+    const here = queue[i];
+    for (const [dx, dz] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+      const x = here.x + dx, z = here.z + dz, key = `${x},${z}`;
+      if (!seen.has(key) && canWalk(x, z, areas)) {
+        seen.add(key); queue.push({ x, z });
+        assert.ok(queue.length < 15000, 'Walkable cells cannot escape into unbounded space');
+      }
     }
-    assert.ok(canWalk(direction * connectorCenter, room.z + 1.7, areas), 'Door opening has useful width');
-    assert.equal(canWalk(direction * connectorCenter, room.z + 2.3, areas), false, 'Player cannot clip the upper door frame');
-    assert.equal(canWalk(direction * connectorCenter, room.z - 2.3, areas), false, 'Player cannot clip the lower door frame');
+  }
+  for (const room of rooms) {
+    assert.ok(seen.has(`${room.x},${room.z}`), room.name);
+    assert.ok(queue.some(point => Math.hypot(point.x - room.approach.x, point.z - room.approach.z) < 0.2), `${room.name} terminal approach`);
   }
 });
 
-test('outer station walls and spaces between room wings block movement', () => {
-  for (const point of [
-    { x: 0, z: 39 }, { x: 0, z: -62 },
-    { x: 12, z: -53 }, { x: -12, z: -53 },
-    { x: 6, z: 0 }, { x: -6, z: 0 },
-    { x: 18, z: 11 }, { x: -18, z: -25 },
-    ...rooms.filter(room => room.x !== 0).map(room => ({ x: room.x + Math.sign(room.x) * room.w / 2, z: room.z })),
-    { x: 100, z: 100 },
-  ]) {
-    assert.equal(canWalk(point.x, point.z, areas), false, JSON.stringify(point));
+test('all-pairs guidance routes lead through real doorways to terminal approaches', () => {
+  for (const origin of MODULES) {
+    for (const destination of MODULES) {
+      let position = { ...origin.approach };
+      const route = routeTo(position, destination.id);
+      assert.ok(route.length > 0 && route.length <= MODULES.length * 3);
+      for (const waypoint of route) position = walkTo(position, waypoint);
+      assert.ok(Math.hypot(position.x - destination.approach.x, position.z - destination.approach.z) < 0.001, `${origin.id} → ${destination.id}`);
+    }
   }
 });
 
-test('the enclosed observation deck joins the central corridor without a collision seam', () => {
-  for (const point of [
-    { x: 0, z: -43.8 }, { x: 0, z: -44.2 },
-    { x: 0, z: -46.9 }, { x: 0, z: -47.1 },
-    { x: 11.5, z: -53 }, { x: -11.5, z: -53 },
-    { x: 0, z: -61.5 },
-  ]) {
-    assert.ok(canWalk(point.x, point.z, areas), JSON.stringify(point));
+test('guidance also works when a destination is selected inside any connecting tube', () => {
+  for (const link of LINKS) {
+    const start = { x: (link.a.x + link.b.x) / 2, z: (link.a.z + link.b.z) / 2 };
+    for (const destination of MODULES) {
+      let position = { ...start };
+      const route = routeTo(position, destination.id);
+      assert.ok(route.length > 0);
+      for (const waypoint of route) position = walkTo(position, waypoint);
+      assert.ok(Math.hypot(position.x - destination.approach.x, position.z - destination.approach.z) < 0.001);
+    }
   }
-  const next = movePlayer({ x: 0, z: -53 }, 0, -20, areas);
-  assert.ok(next.z > -62 + PLAYER_RADIUS, 'The observation window remains a solid boundary');
-  assert.ok(next.z < -61.5);
+  assert.deepEqual(routeTo(START, 'unknown'), []);
+  assert.deepEqual(routeTo({ x: 100, z: 100 }, 'bridge'), []);
 });
 
-test('diagonal movement slides along a corridor wall instead of freezing', () => {
-  const next = movePlayer({ x: 5.4, z: 0 }, 2, 3, areas);
-  assert.ok(next.x >= 5.4 && next.x <= 6 - PLAYER_RADIUS);
-  assert.ok(Math.abs(next.z - 3) < 0.001, 'Unblocked forward movement continues');
-  assert.ok(canWalk(next.x, next.z, areas));
+test('live guidance can be recalculated every movement frame without cutting through hull corners', () => {
+  for (const origin of MODULES) for (const goal of MODULES) {
+    let position = { ...origin.approach };
+    for (let frame = 0; frame < 1600 && Math.hypot(position.x - goal.approach.x, position.z - goal.approach.z) > 0.02; frame++) {
+      const waypoint = routeTo(position, goal.id)[0];
+      assert.ok(waypoint);
+      const dx = waypoint.x - position.x, dz = waypoint.z - position.z, distance = Math.hypot(dx, dz);
+      const step = Math.min(distance, 0.08);
+      position = movePlayer(position, dx / distance * step, dz / distance * step, areas);
+      assert.ok(canWalk(position.x, position.z, areas));
+    }
+    assert.ok(Math.hypot(position.x - goal.approach.x, position.z - goal.approach.z) <= 0.02, `Live route ${origin.id} → ${goal.id}`);
+  }
 });
 
-test('a large movement cannot tunnel through a thin prop collider', () => {
+test('tube-to-module seams stay open while tube walls reject body clipping', () => {
+  for (const link of LINKS) {
+    const dx = Math.sign(link.b.x - link.a.x), dz = Math.sign(link.b.z - link.a.z);
+    for (const endpoint of [link.a, link.b]) {
+      for (const offset of [-0.2, 0, 0.2]) assert.ok(canWalk(endpoint.x + dx * offset, endpoint.z + dz * offset, areas), link.id);
+    }
+    const middle = { x: (link.a.x + link.b.x) / 2, z: (link.a.z + link.b.z) / 2 };
+    assert.ok(canWalk(middle.x, middle.z, areas));
+    for (const sign of [-1, 1]) {
+      assert.equal(canWalk(middle.x + dz * sign * link.width / 2, middle.z + dx * sign * link.width / 2, areas), false, `${link.id} wall`);
+    }
+  }
+});
+
+test('octagonal chamfers and unconnected hull faces are solid', () => {
+  for (const module of MODULES) {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      assert.equal(canWalk(module.x + sx * (module.a - 0.1), module.z + sz * (module.a - 0.1), areas), false, `${module.id} corner`);
+    }
+    for (const [port, dx, dz] of [['N', 0, -1], ['S', 0, 1], ['E', 1, 0], ['W', -1, 0]]) {
+      if (!module.ports.includes(port)) assert.equal(canWalk(module.x + dx * module.a, module.z + dz * module.a, areas), false, `${module.id} ${port}`);
+    }
+  }
+  for (const point of [{ x: 100, z: 100 }, { x: 5, z: -5 }, { x: -5, z: -15 }, { x: 10, z: -10 }]) {
+    assert.equal(canWalk(point.x, point.z, areas), false, 'No floor exists between disconnected hull volumes');
+  }
+});
+
+test('movement slides along narrow tubes and cannot tunnel out of the station', () => {
+  const next = movePlayer({ x: 0.5, z: -4.5 }, 1, -1, areas);
+  assert.ok(next.x >= 0.5 && next.x <= 1.8 / 2 - PLAYER_RADIUS);
+  assert.ok(Math.abs(next.z + 5.5) < 0.001, 'Unblocked movement continues along the tube');
+  const escaped = movePlayer({ x: 0, z: 0 }, 0, 50, areas);
+  assert.ok(escaped.z < 2.8 - PLAYER_RADIUS + 0.001);
+  assert.ok(escaped.z > 2.2);
+  assert.ok(canWalk(escaped.x, escaped.z, areas));
+});
+
+test('large movements stop at thin closed colliders and cross disabled open colliders', () => {
   const testArea = [{ x: 0, z: 0, w: 30, d: 20 }];
-  const obstacle = [{ x: 0, z: 0, w: 0.05, d: 8 }];
-  const next = movePlayer({ x: -6, z: 0 }, 12, 0, testArea, obstacle);
-  assert.ok(next.x < -0.025 - PLAYER_RADIUS, 'Movement stops on the near side of the prop');
-  assert.ok(next.x > -0.6, 'Movement advances up to the obstacle');
-  assert.ok(canWalk(next.x, next.z, testArea, obstacle));
-  assert.equal(canWalk(0, 0, testArea, obstacle), false);
-});
-
-test('a large movement cannot cross the empty gap between rooms', () => {
-  const floor = rooms.find(room => room.id === 'floor');
-  const innerBoundary = floor.z - floor.d / 2;
-  const next = movePlayer({ x: floor.x, z: floor.z }, 0, -52, areas);
-  assert.ok(next.z >= innerBoundary + PLAYER_RADIUS, 'Player cannot jump through the wall toward another room');
-  assert.ok(next.z < innerBoundary + 1);
-  assert.ok(canWalk(next.x, next.z, areas));
+  const obstacle = { x: 0, z: 0, w: 0.05, d: 8 };
+  const stopped = movePlayer({ x: -6, z: 0 }, 12, 0, testArea, [obstacle]);
+  assert.ok(stopped.x < -0.025 - PLAYER_RADIUS && stopped.x > -0.6);
+  assert.equal(canWalk(0, 0, testArea, [obstacle]), false);
+  const passed = movePlayer({ x: -6, z: 0 }, 12, 0, testArea, [{ ...obstacle, disabled: true }]);
+  assert.ok(Math.abs(passed.x - 6) < 0.001);
+  assert.equal(canWalk(0, 0, testArea, [{ ...obstacle, disabled: true }]), true);
 });
 
 test('prop corners allow sliding on the unobstructed axis', () => {
@@ -110,17 +150,15 @@ test('prop corners allow sliding on the unobstructed axis', () => {
   assert.ok(canWalk(next.x, next.z, testArea, obstacle));
 });
 
-test('saved progress accepts known rooms and deduplicates while discarding unrelated data', () => {
-  const storage = {
-    getItem(key) {
-      assert.equal(key, 'uss-sentient-expedition-v1');
-      return JSON.stringify(['floor', 'bridge', 'floor', 'unknown', null, {}, 7, 'archive']);
-    },
-  };
+test('saved progress accepts known rooms and discards duplicate or unrelated data', () => {
+  const storage = { getItem(key) {
+    assert.equal(key, 'uss-sentient-expedition-v1');
+    return JSON.stringify(['floor', 'bridge', 'floor', 'unknown', null, {}, 7, 'archive']);
+  } };
   assert.deepEqual([...readProgress(storage, rooms)], ['floor', 'bridge', 'archive']);
 });
 
-test('missing, malformed or unavailable saved progress starts a fresh expedition', () => {
+test('missing, malformed or unavailable storage starts a fresh expedition', () => {
   for (const value of [null, '', '{not-json', 'null', '{}', '42', '"bridge"', 'true', '[]']) {
     assert.equal(readProgress({ getItem: () => value }, rooms).size, 0, String(value));
   }
