@@ -11,6 +11,10 @@ import { addScreenPanels } from './screen-panels.js';
 import { addImportedProps } from './imported-props.js';
 import { addFixtureDetails } from './fixture-details.js';
 import { createStationLighting } from './lighting.js';
+import { addExteriorDetails } from './exterior-details.js';
+import { addExpansion } from './expansion.js';
+import { addInteractiveDetails } from './interactive-details.js';
+import { CUPOLA } from './expansion-layout.js';
 import { createHatchDesign } from './hatch-details.js';
 
 const LIME = 0xcfff04;
@@ -139,6 +143,7 @@ export async function createWorld(scene, rooms) {
   function floorPolygon(module) {
     const points = modulePolygon(module);
     const shape = new THREE.Shape(points.map(p => new THREE.Vector2(p.x - module.x, -(p.z - module.z))));
+    if (module.id === 'forum') { const hole = new THREE.Path(); hole.absarc(CUPOLA.hatch.x-module.x, -(CUPOLA.hatch.z-module.z), CUPOLA.hatch.radius, 0, Math.PI*2, true); shape.holes.push(hole); }
     const mesh = addMesh(new THREE.ShapeGeometry(shape), deckMat); mesh.rotation.x = -Math.PI / 2; mesh.position.set(module.x, .002, module.z);
     const underside = addMesh(new THREE.ExtrudeGeometry(shape, { depth: .18, bevelEnabled: false }), graphite);
     underside.rotation.x = -Math.PI / 2; underside.position.set(module.x, -.18, module.z);
@@ -301,7 +306,7 @@ export async function createWorld(scene, rooms) {
       const deck = module.elevation < 0 ? 'LOWER DECK' : module.elevation > 1 ? 'OBSERVATION' : module.elevation > 0 ? 'HABITAT DECK' : 'MAIN DECK';
       ctx.fillStyle = '#9daba6'; ctx.font = '400 22px Space, Arial'; ctx.fillText(`SENTIENT / ${deck}`, 256, 325);
     });
-    const marker = textPlane(map, 1.25, 1.25, module.x, .008, module.z); marker.rotation.x = -Math.PI / 2;
+    const marker = textPlane(map, 1.25, 1.25, module.x, .008, module.z+(module.id==='forum'?-1.1:0)); marker.rotation.x = -Math.PI / 2;
   }
 
   for (const module of MODULES) {
@@ -401,7 +406,7 @@ export async function createWorld(scene, rooms) {
     }
     const collider = { id: `door-${link.id}-${endpoint}`, x: point.x, z: point.z, w: axis === 'z' ? 1.85 : .18, d: axis === 'z' ? .18 : 1.85, disabled: false };
     colliders.push(collider);
-    const door = { id: `${link.id}-${endpoint}`, variant, number, x: point.x, z: point.z, axis, openness: 0, collider, left, right, signal, holdUntil: 0 };
+    const door = { id: `${link.id}-${endpoint}`, variant, number, y:current.elevation+1.2, x: point.x, z: point.z, axis, openness: 0, collider, left, right, signal, holdUntil: 0 };
     doors.push(door);
   }
 
@@ -434,10 +439,13 @@ export async function createWorld(scene, rooms) {
   const importedStats = await addImportedProps(detailContext);
   const lifeScienceStats = addLifeScienceDetails(detailContext);
   const quarterStats = addQuarterDetails(detailContext);
+  const interactive = addInteractiveDetails(detailContext);
+  const expansion = addExpansion(detailContext);
+  const exteriorStats = addExteriorDetails(detailContext);
   endSection();
 
 
-  addSpaceEnvironment({scene,root,animated,texture,mat,addMesh,resourceMaterials:materials,resourceGeometries:geometries,resourceTextures:textures});
+  const spaceStats = addSpaceEnvironment({scene,root,animated,texture,mat,addMesh,resourceMaterials:materials,resourceGeometries:geometries,resourceTextures:textures});
 
   const detailStats = kit.flush();
   for (const { material, transforms, parent } of batches.values()) {
@@ -458,16 +466,18 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    terminalMeshes, colliders, doors, detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
+    terminalMeshes, colliders, doors, expansion, interactive, spaceStats, exteriorStats, devices: [...interactive.devices,...expansion.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
     animate(time, dt = 1 / 60, player, motionScale = 1) {
       for (const update of animated) update(time * motionScale);
+      interactive.update(time*motionScale,dt);
+      expansion.update(time,dt,player || {x:0,z:0});
       let movingHatch = false;
       for (const door of doors) {
         const previous = door.openness;
         const distance = player ? Math.hypot(player.x - door.x, player.z - door.z) : Infinity;
-        if (distance < 2.2) door.holdUntil = time + .9;
+        if (distance < 2.2 && player?.layer !== 'cupola') door.holdUntil = time + .9;
         const target = time < door.holdUntil ? 1 : 0;
         const speed = Math.min(Math.max(dt, 0), .08) / .7;
         door.openness = target ? Math.min(1, door.openness + speed) : Math.max(0, door.openness - speed);

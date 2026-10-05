@@ -12,6 +12,7 @@ const assetFailures = [];
 const loadedModelURLs = new Set();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
 page.setDefaultTimeout(12000);
+await page.routeWebSocket('**', () => {});
 const observeErrors = target => {
   target.on('pageerror', error => failures.push(error.message));
   target.on('console', message => {
@@ -289,7 +290,7 @@ try {
   const approach = rooms.find(room => room.id === 'front-door').approach;
   await mobile.evaluate(({ x, z }) => window.__SENTIENT__.teleport(x, z), approach);
   await mobile.waitForFunction(() => window.__SENTIENT__.snapshot().nearRoom === 'front-door');
-  await mobile.getByRole('button', { name: 'Interact with terminal', exact: true }).tap();
+  await mobile.getByRole('button', { name: 'Use nearby control or terminal', exact: true }).tap();
   await mobile.getByRole('heading', { name: 'The Front Door', exact: true }).waitFor();
   await mobile.getByRole('button', { name: 'CONTINUE EXPEDITION' }).tap();
   await mobile.getByRole('button', { name: 'Open deck map', exact: true }).tap();

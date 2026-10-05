@@ -51,3 +51,10 @@ body:not(.playing) .location,body:not(.playing) .mission{display:none}
 .photo-panel{position:fixed;z-index:50;bottom:28px;left:50%;transform:translateX(-50%);width:min(820px,calc(100% - 32px));display:flex;align-items:center;justify-content:space-between;gap:28px;padding:22px 26px;border:1px solid #71816b66;background:#091310ed;backdrop-filter:blur(15px);color:#eeefe7}
 .photo-panel[hidden]{display:none}.photo-panel p{font-size:20px;margin:8px 0}.photo-panel small{color:#a2b1a3;font-size:12px}.photo-panel .primary{flex-shrink:0;font-size:11px}.photo-mode #app>*:not(.photo-panel):not(.toast){visibility:hidden;pointer-events:none}.photo-mode #touch-controls{display:none}
 @media(max-width:600px){.photo-panel{bottom:16px;padding:18px;gap:18px;align-items:stretch;flex-direction:column}.photo-panel p{font-size:17px}.photo-panel .primary{justify-content:center}}
+
+/* Compact environmental readout follows the active deck without blocking aim. */
+.environment-status{position:absolute;left:42px;bottom:197px;max-width:310px;padding:12px 15px;border-left:1px solid #88b9c16b;background:linear-gradient(90deg,#06151dc9,transparent);pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.environment-status span{font-size:8px;letter-spacing:1.7px;color:#93b8c4}.environment-status b{font-size:11px;font-weight:400;color:#e1f0dd;letter-spacing:.6px}.environment-status small{font-size:8px;letter-spacing:.65px;line-height:1.55;color:#8ba29a}
+body:not(.playing) .environment-status{display:none}
+@media(max-width:800px){.environment-status{left:18px;bottom:187px;max-width:220px;padding:8px 10px}.environment-status small{display:none}.interact{max-width:calc(100% - 24px);white-space:normal}.interact span{line-height:1.45}.room-row .num{min-width:34px}}
+@media(pointer:coarse){body.playing .environment-status{bottom:287px;max-width:220px}}

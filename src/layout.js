@@ -29,6 +29,9 @@ export const LINKS = [
   return { id: `${from}--${to}`, from, to, a: { x: first.x + dx * first.hx, z: first.z + dz * first.hz }, b: { x: second.x - dx * second.hx, z: second.z - dz * second.hz }, width, elevationA: first.elevation, elevationB: second.elevation, kind: first.elevation === second.elevation ? 'level' : to === 'commons' ? 'ramp' : 'stairs' };
 });
 
+// Dedicated EVA side port; this is not an eighth Sentient department.
+MODULES.find(m => m.id === 'front-door').ports.push('E');
+
 export function modulePolygon(m) {
   const x = m.hx, z = m.hz, cx = x - m.cut, cz = z - m.cut;
   return [[-cx,-z],[cx,-z],[x,-cz],[x,cz],[cx,z],[-cx,z],[-x,cz],[-x,-cz]].map(([x,z]) => ({ x: x + m.x, z: z + m.z }));

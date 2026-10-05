@@ -16,6 +16,20 @@ The exploration loop maps seven Sentient rooms to seven collectible terminal sig
 
 The room names and functions come from the existing Sentient Hub, with supporting company content and brand assets from the Sentient Website. See [the research and source mapping](docs/SENTIENT-RESEARCH.md).
 
+## Living station expansion
+
+Audio starts after entering the station. Footsteps follow actual walking distance, doors and controls emit spatial cues, and machinery sits under a procedural musical score. Seven department motifs share a harmonic palette and crossfade as you change rooms. Airlock, exterior helmet audio and the cupola have their own profiles. The sound button mutes everything and remembers the choice. Audio uses a fixed pool of voices with no network audio files.
+
+Seven operable department panels control a suit test, archive core, fabrication carriage, specimen scanner, tactical model, hydroponic cycle and orbital tracker. Aim at a screen and click, or approach and press E. The visible instruments, indicator lights and screens react. These are fictional local simulations.
+
+- **Arrival → A1 airlock:** the east hatch leads to the suit bay. Operate the pressure console, wait for depressurization, then walk through the exterior hatch. The outer and inner hatches are interlocked. Return to the bay and cycle again to restore cabin pressure.
+- **EVA gantry:** magnetic boots keep movement on the gold-railed exterior catwalk. Explore solar wings, radiator assemblies, thermal panels and a wider lookout platform; return by the same route.
+- **Forum 05 → lower cupola:** press E beside the round floor hatch. It opens for an animated ladder descent to a spherical glass observation deck 4.8 metres below Forum. A transparent nadir floor overlooks the ocean planet Pelagia. Operate the survey instrument or use the ladder control to climb back.
+
+The map includes all three destinations and shows the lower deck under Forum. A translation-independent sky contains 15,600 distant stars. Pelagia has procedural oceans, land, weather and a solar terminator. The planetary orbit is represented in the station's reference frame, rather than simulated orbital dynamics. New extension lamps reuse the same six-light pool; Performance still allocates no shadow/AO/bloom buffers.
+
+`npm run test:expansion` verifies the real two-way airlock journey, cupola descent/ascent, all seven clickable panels, map destinations, room audio and rendering. `npm run test:audio` runs standalone real Web Audio tests (gesture unlocking, audible output, spatial cues, profile changes, fixed allocations, muting and disposal). Set `AUDIO_GAME_URL=http://127.0.0.1:5173` to include mute preference persistence in the game UI.
+
 ## Run locally
 
 Requires a recent Node.js version supported by Vite.
@@ -45,7 +59,8 @@ With the dev server running and Google Chrome installed, `npm run test:browser` 
 | Move | W A S D or arrow keys |
 | Look | Mouse or click and drag |
 | Sprint | Shift |
-| Inspect nearby terminal | E |
+| Operate control / scan terminal / use hatch | E |
+| Operate an aimed screen | Left click |
 | Station map | M |
 | Expedition logs | J |
 | Ray-traced still view | R |

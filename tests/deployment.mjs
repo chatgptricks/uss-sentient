@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { publicExpansionJourney } from './public-expansion.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 // Production smoke: public DOM, real keyboard input, and actual network/GPU work.
@@ -90,6 +91,7 @@ try {
   try {
     await page.waitForFunction(() => document.getElementById('location-name').textContent === 'Pressure tunnel');
   } finally { await page.keyboard.up('KeyS'); }
+  await publicExpansionJourney(page,base);
   assert.deepEqual(errors, [], 'No JavaScript or WebGL errors');
   assert.deepEqual(failedAssets, [], 'No failed production asset or worker requests');
   await writeFile('test-results/deployment-validation.json', JSON.stringify({ url: base, elapsedSeconds: +(Date.now() - startedAt).toFixed(0) / 1000, frame, models: [...models], fonts: [...fonts], brand: [...brand], workers: [...workers], workerResponses: [...workerResponses], photoStatus, errors, failedAssets }, null, 2));

@@ -55,6 +55,10 @@ export function createStationLighting(root) {
     spot(`${link.id} / transit luminaire`, 0xe2edff, 19,
       [x,floor+2.42,z], [x,floor,z], Math.max(5,length), 1.12);
   }
+  spot('airlock / ceiling practical',0xdceaff,32,[6.5,2.57,0],[6.5,.5,0],7);
+  spot('airlock / transfer tunnel',0xdceaff,16,[3.5,2.5,0],[3.5,0,0],4);
+  spot('cupola / nadir ceiling practical',0xdaeaff,32,[-.75,-1.8,-22],[0,-4.5,-22],7);
+  spot('cupola / instrument fill',0xd5efc5,16,[.75,-1.8,-22],[1,-4.2,-20],6);
   function assignPractical(light, source) {
     if (assignments.get(light)===source) return;
     light.name=source.name; light.color.copy(source.color); light.intensity=source.intensity;
@@ -88,7 +92,7 @@ export function createStationLighting(root) {
   sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
   root.add(sun,sun.target); root.updateMatrixWorld(true); sun.shadow.updateMatrices(sun);
   const bounds = new THREE.Box3();
-  for (const x of [-15.5,16]) for (const y of [-1.4,5]) for (const z of [-40.5,4]) {
+  for (const x of [-30,30]) for (const y of [-7,6]) for (const z of [-40.5,4]) {
     bounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(sun.shadow.camera.matrixWorldInverse));
   }
   Object.assign(sun.shadow.camera,{left:bounds.min.x-.4,right:bounds.max.x+.4,bottom:bounds.min.y-.4,top:bounds.max.y+.4,near:Math.max(.1,-bounds.max.z-1),far:-bounds.min.z+1});
@@ -113,6 +117,7 @@ export function createStationLighting(root) {
   }
   function update(player, dt, movingHatch) {
     time += dt;
+    if (quality==='performance') sun.intensity=player.zone==='exterior'||player.layer==='cupola'?1.7:0;
     if (time-lastSelection>.20 || Math.hypot(player.x-lastPosition.x,player.z-lastPosition.y)>1) {
       lastSelection = time;
       lastPosition.set(player.x,player.z);
@@ -125,7 +130,7 @@ export function createStationLighting(root) {
         glow.name=source.name; glow.position.copy(source.position); glow.quaternion.copy(source.quaternion); glow.userData.source=source;
       }
       const budget = quality==='high'?3:quality==='performance'?0:2;
-      const distance=source=>Math.hypot(source.position.x-player.x,source.position.z-player.z);
+      const distance=source=>Math.hypot(source.position.x-player.x,source.position.y-(player.y??1.6),source.position.z-player.z)+(player.layer==='cupola'&&!source.name.startsWith('cupola')?30:player.layer!=='cupola'&&source.name.startsWith('cupola')?30:0);
       const previousShadowSources=active.map(light=>assignments.get(light));
       const shadowScore=source=>distance(source)*(previousShadowSources.includes(source)?.85:1);
       const shadowSources=[...practicalSources].sort((a,b)=>shadowScore(a)-shadowScore(b)).slice(0,budget);
