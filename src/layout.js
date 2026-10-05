@@ -38,10 +38,10 @@ MODULES.find(m => m.id === 'front-door').ports.push('E');
 export const HULL_PROFILES = {
   'front-door': { name: 'Offset docking nose', face: 4, main: 2, path: [[-.12,.75],[-.06,1.75],[.94,2.1],[1.13,.85]] },
   archive: { name: 'Stepped data vault', face: 2, main: 2, path: [[0,.7],[.18,1.5],[.72,1.5],[.72,.45],[1,.45]] },
-  floor: { name: 'L-shaped fabrication bay', face: 4, main: 2, path: [[.36,0],[.36,2.15],[.92,2.15],[1,1.55]] },
+  floor: { name: 'Fabrication and machinery bay', face: 4, main: 3, path: [[.02,.35],[.08,2.8],[.3,3.5],[.95,3.5],[1,2.0]] },
   lab: { name: 'Faceted specimen lobe', face: 6, main: 3, path: [[-.14,.7],[-.12,1.5],[.1,1.95],[.88,1.75],[1.05,.9]] },
-  forum: { name: 'Diagonal strategy annex', face: 3, main: 2, path: [[-.12,1.35],[.25,2.1],[1.05,1.9],[1.18,.75]] },
-  commons: { name: 'Crescent habitat', face: 4, main: 2, path: [[.04,.85],[.22,1.7],[.75,2.4],[.93,1.9],[1,1]] },
+  forum: { name: 'Six-seat strategy chamber', face: 3, main: 3, path: [[-.9,2.1],[-1.2,4.5],[-.35,6.1],[1.8,6.1],[2.2,4.3],[1.8,2.0]] },
+  commons: { name: 'Habitat and sanitation crescent', face: 4, main: 3, path: [[-.3,.8],[-.3,4.2],[-.021,4.95],[.75,4.85],[1.05,2.8],[1,1]] },
   bridge: { name: 'Offset panoramic prow', face: 0, main: 2, path: [[-.12,1.05],[.08,2.45],[.7,3.3],[1.1,2.55],[1.15,.85]] },
 };
 

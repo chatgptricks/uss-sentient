@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { moduleFacet } from './layout.js';
+import { moduleFacet, moduleEdges } from './layout.js';
 
 /** Local, fictional flight instruments. Nothing contacts a Sentient service. */
 export function addInteractiveDetails(ctx) {
@@ -27,7 +27,9 @@ export function addInteractiveDetails(ctx) {
   };
 
   function face(m, index, offset) {
-    const { a, b } = moduleFacet(m, index);
+    // The tactical control stays visible beside the meeting-room entrance;
+    // the large conference display occupies the chamber's far wall sightline.
+    const { a, b } = m.id==='forum' ? moduleEdges(m).filter(e=>e.expanded).at(-1) : moduleFacet(m, index);
     const yaw = -Math.atan2(b.z - a.z, b.x - a.x);
     return { origin: { x: (a.x + b.x) / 2 + offset * Math.cos(yaw), z: (a.z + b.z) / 2 - offset * Math.sin(yaw) }, yaw };
   }
@@ -211,6 +213,10 @@ export function addInteractiveDetails(ctx) {
         animate(0, 0, mode);
         return spec.messages[mode];
       },
+    };
+    if(module.id==='forum') device.approach={
+      x:surface.origin.x+Math.sin(surface.yaw)*1.25,
+      z:surface.origin.z+Math.cos(surface.yaw)*1.25,
     };
     devices.push(device); motions.push((time, dt) => animate(time, dt, mode)); stats.devices++;
     ctx.endSection();

@@ -62,6 +62,11 @@ export function createStationLighting(root) {
   spot('airlock / transfer tunnel',0xdceaff,16,[3.5,2.5,0],[3.5,0,0],4);
   spot('cupola / nadir ceiling practical',0xdaeaff,32,[-.75,-1.8,-22],[0,-4.5,-22],7);
   spot('cupola / instrument fill',0xd5efc5,16,[.75,-1.8,-22],[1,-4.2,-20],6);
+  // These are fixture positions, not additional GPU lights. The same six-light
+  // pool follows the player into the larger occupied bays.
+  spot('forum / conference pendant',0xffe8cc,44,[5.533,2.67,-17.317],[5.533,.7,-17.317],6,1.22);
+  spot('commons / sanitation luminaire',0xdceaff,25,[12.55,3.20,-16.65],[12.55,1.1,-16.65],4.2,1.15);
+  spot('floor / machinery luminaire',0xffe4c9,28,[-10.40,1.69,-6.25],[-10.20,-.4,-6.25],5.3,1.18);
   function assignPractical(light, source) {
     if (assignments.get(light)===source) return;
     light.name=source.name; light.color.copy(source.color); light.intensity=source.intensity;

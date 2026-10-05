@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { corridorWindowAt } from './corridor-layout.js';
 
 // Equipment occupies the gaps in hull-details' 1.25 m service-panel rhythm.
 // Only three existing finishes plus one shared instrument atlas are used.
@@ -71,6 +72,7 @@ export function addCorridorDetails(ctx) {
     const L = (...args) => { stats.parts++; localBox(origin, ry, ...args); };
     const P = (...args) => { stats.parts++; kit.localPipe(origin, ry, ...args); };
     function face(side, at) {
+      if (corridorWindowAt(link, side, at, .24)) at += 1.25;
       const point = kit.toWorld(origin, ry, [side * half, 0, at]);
       return { origin: { x: point[0], z: point[2] }, ry: ry - side * Math.PI / 2 };
     }
@@ -156,7 +158,9 @@ export function addCorridorDetails(ctx) {
     const builders = { rescue, canisters, table, cargo, inspection };
     builders[system.equipment[0]](face(-1, first));
     builders[system.equipment[1]](face(1, last));
-    builders[system.equipment[2]](face(-1, last));
+    // An observation port replaces a service pack instead of stacking two packs
+    // in the same remaining bay. Lower canisters can still sit under a screen.
+    if (!corridorWindowAt(link,-1,first,.24)) builders[system.equipment[2]](face(-1, last));
 
     const screenFace = face(1, first);
     caseFrame(screenFace, 1.58, .46, .74);

@@ -175,6 +175,7 @@ export function addRoomCharacterDetails(ctx) {
     let chosen;
     for (let inset = .40; inset <= .90; inset += .025) {
       const [x, , z] = point(f, 0, 0, inset), c = Math.abs(Math.cos(f.ry)), s = Math.abs(Math.sin(f.ry));
+      if (x > 10.8 && z > -18.45) continue; // Sanitation compartment clearance.
       const w = (width + .10) * c + .59 * s, d = (width + .10) * s + .59 * c;
       const corners = [-1, 0, 1].flatMap(sx => [-1, 0, 1].map(sz => [x + sx * w / 2, z + sz * d / 2]));
       if (!corners.every(([px, pz]) => insidePolygon(px, pz, polygon))) continue;

@@ -19,6 +19,11 @@ import { addExpansion } from './expansion.js';
 import { addInteractiveDetails } from './interactive-details.js';
 import { CUPOLA } from './expansion-layout.js';
 import { createHatchDesign } from './hatch-details.js';
+import { corridorWindows } from './corridor-layout.js';
+import { addCorridorWindows } from './corridor-windows.js';
+import { addMeetingDetails } from './meeting-details.js';
+import { addServiceDetails } from './service-details.js';
+import { addHabitationProps } from './habitation-props.js';
 
 const LIME = 0xcfff04;
 const TAU = Math.PI * 2;
@@ -42,6 +47,7 @@ export async function createWorld(scene, rooms) {
     const dx = link.b.x-link.a.x, dz = link.b.z-link.a.z, l2 = dx*dx+dz*dz;
     const sx = (link.elevationB-link.elevationA)*dx/l2, sz = (link.elevationB-link.elevationA)*dz/l2;
     setSection(`tube-${link.id}`,new THREE.Matrix4().set(1,0,0,0,sx,1,sz,link.elevationA-sx*link.a.x-sz*link.a.z,0,0,1,0,0,0,0,1));
+    return buildParent;
   }
   function endSection() { buildParent = root; kit.setParent(root); }
 
@@ -335,7 +341,15 @@ export async function createWorld(scene, rooms) {
     localBox(center, ry, 0, -.28, 0, link.width, .2, length, graphite);
     if (link.kind !== 'stairs') { const plane = addMesh(new THREE.PlaneGeometry(link.width, length), deckMat); plane.position.set(center.x, .003, center.z); plane.rotation.set(-Math.PI / 2, 0, -ry); }
     for (const side of [-1, 1]) {
-      localBox(center, ry, side * (hw + .07), 1.25, 0, .18, 2.25, length, hull);
+      const window = corridorWindows(link).find(w => w.side === side);
+      if (window) {
+        const left=window.at-window.width/2, right=window.at+window.width/2;
+        const bottom=window.centerY-window.height/2, top=window.centerY+window.height/2;
+        for (const [lo,hi] of [[-length/2,left],[right,length/2]])
+          localBox(center,ry,side*(hw+.07),1.25,(lo+hi)/2,.18,2.25,hi-lo,hull);
+        localBox(center,ry,side*(hw+.07),(.125+bottom)/2,window.at,.18,bottom-.125,window.width,hull);
+        localBox(center,ry,side*(hw+.07),(top+2.375)/2,window.at,.18,2.375-top,window.width,hull);
+      } else localBox(center, ry, side * (hw + .07), 1.25, 0, .18, 2.25, length, hull);
       localBox(center, ry, side * (hw - .04), .30, 0, .085, .44, length, graphite);
       localBox(center, ry, side * (hw - .055), .57, 0, .048, .045, length, accent);
       localBox(center, ry, side * (hw - .08), 1.0, 0, .035, .044, length - .35, silver);
@@ -431,10 +445,11 @@ export async function createWorld(scene, rooms) {
   }
 
   const detailContext = { root, rooms, MODULES, LINKS, doors, colliders, box, localBox, mat, texture, addMesh, textPlane, roundedFrame, animated, kit, beginModule, beginLink, endSection,
-    materials: {hull,enamel,padding,seal,graphite,silver,accent,whiteLight,blueLight,glass},
+    materials: {hull,enamel,padding,seal,graphite,silver,accent,whiteLight,blueLight,glass,viewportGlass},
     resourceMaterials: materials, resourceGeometries: geometries, resourceTextures: textures };
   addHullDetails(detailContext);
   const corridorStats=addCorridorDetails(detailContext);
+  const corridorViewports=addCorridorWindows(detailContext);
   addDepartmentDetails(detailContext);
   addFinishDetails(detailContext);
   const fixtureStats = addFixtureDetails(detailContext);
@@ -443,6 +458,10 @@ export async function createWorld(scene, rooms) {
   const lifeScienceStats = addLifeScienceDetails(detailContext);
   const quarterStats = addQuarterDetails(detailContext);
   const interactive = addInteractiveDetails(detailContext);
+  const meeting=addMeetingDetails(detailContext);
+  const services=addServiceDetails(detailContext);
+  const habitation=addHabitationProps(detailContext);
+  await habitation.ready;
   const roomCharacterStats=addRoomCharacterDetails(detailContext);
   const expansion = addExpansion(detailContext);
   const exteriorStats = addExteriorDetails(detailContext);
@@ -470,14 +489,18 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    terminalMeshes, colliders, doors, expansion, interactive, spaceStats, exteriorStats, corridorStats, roomCharacterStats, devices: [...interactive.devices,...expansion.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
+    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats,
+    devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
     animate(time, dt = 1 / 60, player, motionScale = 1) {
       for (const update of animated) update(time * motionScale);
       interactive.update(time*motionScale,dt);
       expansion.update(time,dt,player || {x:0,z:0});
-      let movingHatch = false;
+      let movingHatch = corridorViewports.update(time,dt);
+      movingHatch=services.update(time,dt,player,motionScale)||movingHatch;
+      meeting.update(time,dt);
+      habitation.update(time,dt*motionScale);
       for (const door of doors) {
         const previous = door.openness;
         const distance = player ? Math.hypot(player.x - door.x, player.z - door.z) : Infinity;
@@ -494,6 +517,7 @@ export async function createWorld(scene, rooms) {
       if (player) lighting.update(player,dt,movingHatch);
     },
     dispose() {
+      meeting.dispose?.();services.dispose?.();habitation.dispose();
       lighting.dispose();
       root.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
       scene.remove(root); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose());

@@ -56,7 +56,7 @@ try {
         assert.equal(lighting.ssaoEnabled, quality !== 'performance', `${quality} applies its ambient-occlusion setting`);
         assert.equal(lighting.bloomEnabled, quality !== 'performance', `${quality} applies its bloom setting`);
         assert.ok(lighting.shadowCasters > 20 && lighting.shadowReceivers > 20, 'Hull and equipment participate in shadowing');
-        assert.equal(lighting.practicals, 25, 'Room, transit and expansion practicals retain all source positions');
+        assert.equal(lighting.practicals, 28, 'Room, transit and occupied annex fixtures share six active light slots');
         assert.equal(lighting.activePracticals, 6, 'The shader evaluates a fixed pool of six practical lamps');
         assert.equal(new Set(lighting.practicalSources).size, 6, 'Practical pool slots illuminate distinct sources');
         assert.equal(lighting.screenSpills, 7, 'Every department retains its configured display illumination');

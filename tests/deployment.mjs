@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 // Deliberately does not depend on development instrumentation or teleportation.
 const base = process.env.GAME_URL || 'http://127.0.0.1:4183/uss-sentient/';
 const origin = new URL(base), startedAt = Date.now();
-const errors = [], failedAssets = [], models = new Set(), fonts = new Set(), brand = new Set(), workers = new Set(), workerResponses = new Set();
+const errors = [], failedAssets = [], models = new Set(), fonts = new Set(), brand = new Set(), fabrics = new Set(), workers = new Set(), workerResponses = new Set();
 await mkdir('test-results', { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist'] });
 const context = await browser.newContext({ viewport: { width: 1200, height: 820 }, deviceScaleFactor: 1 });
@@ -25,6 +25,7 @@ context.on('response', response => {
   if (/\/models\/.+\.glb$/.test(path)) models.add(url);
   if (/\/brand\/.+\.(?:ttf|woff2?)$/.test(path)) fonts.add(url);
   if (/\/brand\/.+\.svg$/.test(path)) brand.add(url);
+  if (/\/textures\/habitation\/.+\.jpg$/.test(path)) fabrics.add(url);
   if (/generateMeshBVH\.worker[^/]*\.js$/.test(path)) workerResponses.add(url);
 });
 const playing = () => page.waitForFunction(() => document.body.classList.contains('playing'));
@@ -36,8 +37,9 @@ try {
   await page.evaluate(() => document.fonts.ready);
   assert.equal(models.size, 19, 'All 19 production GLBs load');
   assert.equal(fonts.size, 2, 'Both bundled brand fonts load');
+  assert.equal(fabrics.size, 2, 'Both local fabric maps load on the deployed base path');
   assert.ok([...brand].some(url => url.endsWith('/sentient-logo.svg')), 'The Sentient logo loads');
-  for (const url of [...models, ...fonts, ...brand]) {
+  for (const url of [...models, ...fonts, ...brand, ...fabrics]) {
     const asset = new URL(url);
     assert.equal(asset.origin, origin.origin, 'Game assets stay on the deployment origin');
     assert.ok(asset.pathname.startsWith(origin.pathname), 'Game assets retain the repository base path');
@@ -68,6 +70,7 @@ try {
   } finally { await page.keyboard.up('KeyW'); }
   await page.screenshot({ path: 'test-results/deployment-game.png' });
   await page.keyboard.press('KeyM');
+  for (const name of ['Briefing room','Bathroom','Machinery bay']) assert.equal(await page.getByRole('button',{name:`Navigate to ${name}`,exact:true}).count(),1);
   await page.getByRole('button', { name: 'Navigate to The Bridge', exact: true }).click();
   await playing();
   await page.waitForFunction(() => /BRIDGE/.test(document.getElementById('route-destination').textContent));

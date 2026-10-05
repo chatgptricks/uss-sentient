@@ -33,3 +33,7 @@ Only the selected models, their one required texture and license texts are copie
 The still-view renderer uses [three-gpu-pathtracer 0.0.24](https://github.com/gkjohnson/three-gpu-pathtracer/tree/v0.0.24) and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), by Garrett Johnson, under the MIT license. Exact dependency versions are retained in the lockfile. The renderer is loaded only when requested; its scene snapshots convert instanced equipment to static geometry and bake the existing Sentient palette and star shader into compatible materials. This is progressive WebGL path tracing, not a claim of dedicated hardware RT acceleration.
 
 Plant geometry, laboratory instruments, strategy furniture, EVA gear and department-specific hatch treatments are authored procedurally for this game. They reuse station materials and batched geometry; they require no external 3D service.
+
+## Habitation materials and modeled fittings
+
+The six-seat conference furniture, vacuum sanitation fittings, machinery rack, pressure-window shutters and secured personal equipment are original procedural meshes. The fabric packs use two CC0 normal/roughness maps from Rob Tuytel's Poly Haven Fabric Pattern 07; [the material provenance record](habitation-asset-credit.md) lists the original source, license, exact files and checksums. All files ship locally under the GitHub Pages base path.

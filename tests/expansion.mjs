@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { moduleAt } from '../src/layout.js';
 await mkdir('test-results',{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-webgl','--ignore-gpu-blocklist']});
 const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -54,9 +55,10 @@ try {
  const devices=(await snap()).devices.filter(d=>d.id.startsWith('station-'));
  const rooms=(await snap()).rooms;
  for(const d of devices){
-   const r=rooms.find(r=>r.id===d.roomId),vx=r.x-d.x,vz=r.z-d.z,len=Math.hypot(vx,vz),x=d.x+vx/len*1.18,z=d.z+vz/len*1.18;
+   const r=rooms.find(r=>r.id===d.roomId),vx=r.x-d.x,vz=r.z-d.z,len=Math.hypot(vx,vz),x=d.approach?.x??d.x+vx/len*1.18,z=d.approach?.z??d.z+vz/len*1.18;
    const yaw=Math.atan2(-(d.x-x),-(d.z-z));const floor=r.elevation;
-   const pitch=Math.atan2(d.y-(floor+1.6),1.18);
+   assert.equal(moduleAt({x,z})?.id,d.roomId,`${d.id} approach is inside its pressure hull`);
+   const pitch=Math.atan2(d.y-(floor+1.6),Math.hypot(d.x-x,d.z-z));
    await pose(x,z,yaw,'station',pitch);await page.waitForTimeout(200);
    await page.mouse.click(720,500);await page.waitForTimeout(120);
    const after=(await snap()).devices.find(item=>item.id===d.id);

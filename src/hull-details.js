@@ -1,4 +1,5 @@
 import { moduleFacet } from './layout.js';
+import { corridorWindowAt } from './corridor-layout.js';
 
 /** Fixed spacecraft detailing. It adds no collision volumes or moving door parts. */
 export function addHullDetails(ctx) {
@@ -165,6 +166,7 @@ export function addHullDetails(ctx) {
       }
       // Small inset service boxes break the tube walls without narrowing the aisle.
       for (let z = -run + .56; z < run - .12; z += 1.25) {
+        if (corridorWindowAt(link, side, z, .345)) continue;
         L(origin, ry, side * (half - .024), 1.51, z, .105, 1.05, .69, M.seal);
         L(origin, ry, side * (half - .087), 1.51, z, .027, .94, .59, style === 'habitat' ? M.padding : style === 'production' ? M.graphite : M.enamel);
         if (style === 'production') {
@@ -296,6 +298,7 @@ export function addHullDetails(ctx) {
         L(origin, ry, side * .6, 2.295, z, .25, .023, .045, titanium);
       }
       for (let z = -run + .56; z < run - .12; z += 1.25) {
+        if (corridorWindowAt(link, side, z, .345)) continue;
         // All wall fasteners face inward toward the tube centre.
         const normalRy = ry - side * Math.PI / 2;
         const p = kit.toWorld(origin, ry, [side * (half - .13), 0, z]);

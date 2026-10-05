@@ -159,7 +159,7 @@ export async function addImportedProps(ctx) {
     } else if (id === 'floor') {
       p('largeGenerator', -module.hx + .73, -.33, .97, Math.PI / 2, .05, true, 'Production power unit');
       p('generator', -module.hx + .64, .97, .82, Math.PI / 2, .06, true, 'Instrument power supply');
-      p('wideComputer', -.25, module.hz + 1.35, .95, Math.PI, .75, true, 'Production editing console');
+      p('wideComputer', -.25, module.hz + 3.0, .95, Math.PI, .75, true, 'Production editing console');
       p('monitor', .66, module.hz - .48, .84, Math.PI, .78, true, 'Render status monitor');
       p('openCase', 1.85, module.hz - .54, .53, Math.PI / 2, .05, true, 'Production tool case');
       upperDisplay(module, parent, 'wideDisplay', 5, .48, 0, 2.10);
@@ -173,9 +173,9 @@ export async function addImportedProps(ctx) {
     } else if (id === 'commons') {
       p('console', module.hx - .44, -.72, 1.08, -Math.PI / 2, .07, true, 'Shared account console');
       p('computer', module.hx - .43, .67, .59, -Math.PI / 2, .82, true, 'Community communications');
-      bayProp('battery',4,-.75,.50,.54,'Life support reserve');
-      bayProp('drum',4,0,.50,.54,'Resource cartridge');
-      bayProp('openCase',4,.75,.50,.50,'Shared equipment stowage');
+      p('battery',-1.8,4.6,.54,Math.PI/2,.07,true,'Life support reserve');
+      p('drum',-1.8,5.2,.54,Math.PI/2,.07,true,'Resource cartridge');
+      p('openCase',-1.8,5.8,.50,Math.PI/2,.07,true,'Shared equipment stowage');
       upperDisplay(module, parent, 'wideDisplay', 3, .50, 0, 2.11);
     } else if (id === 'forum') {
       // Four-way traffic keeps the Forum floor empty. Imported consoles are
