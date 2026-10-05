@@ -50,7 +50,7 @@ const floorHeight = (p=position) => layer==='cupola'?CUPOLA.elevation:expansionZ
 
 $('app').innerHTML = `
   <header class="topbar">
-    <div class="brand"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL STATION / 0.4</span></div></div>
+    <div class="brand"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><span class="brand-rule"></span><div class="brand-caption"><strong>USS SENTIENT</strong><span>ORBITAL STATION / 0.5</span></div></div>
     <div class="top-actions"><div class="live-status"><i class="status-dot"></i> ALL SYSTEMS NOMINAL</div><button id="map-btn" class="icon-button" title="Deck map (M)" aria-label="Open deck map">${svg('map')}<span class="nav-label">DECK MAP</span><kbd>M</kbd></button><button id="journal-btn" class="icon-button" title="Expedition log (J)" aria-label="Open expedition log">${svg('book')}</button><button id="sound-btn" class="icon-button" title="Enable ambient audio" aria-label="Enable ambient audio" aria-pressed="false">${svg('mute')}</button><button id="settings-btn" class="icon-button" title="Settings" aria-label="Open settings">${svg('settings')}</button><button id="fullscreen-btn" class="icon-button" title="Fullscreen" aria-label="Toggle fullscreen">${svg('expand')}</button></div>
   </header>
   <div class="coordinates"><span>SECTOR 07</span><span class="slash">/</span><span>SENTIENT SYSTEM</span></div>
@@ -242,9 +242,9 @@ function openMap() {
   renderMap($('deck-canvas'), true);
   $('deck-canvas').onclick = event => {
     const canvas = event.currentTarget, bounds = canvas.getBoundingClientRect();
-    const scale = Math.min((canvas.width-35)/43,(canvas.height-40)/47);
+    const scale = Math.min((canvas.width-35)/43,(canvas.height-40)/52);
     const x = ((event.clientX-bounds.left)/bounds.width*canvas.width-canvas.width/2)/scale+2;
-    const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-18.3;
+    const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-18.9;
     const module = moduleAt({x,z});
     if (module) { target = rooms.find(r => r.id===module.id); notify(`Route set: ${target.name}. Follow the lime arrow.`); closeModal(); }
   };
@@ -391,9 +391,9 @@ function returnRoute() {
 function renderMap(canvas, large = false) {
   const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  const scale = Math.min((width - 35) / 43, (height - 40) / 47);
+  const scale = Math.min((width - 35) / 43, (height - 40) / 52);
   const px = x => width / 2 + (x-2) * scale;
-  const pz = z => height / 2 + (z + 18.3) * scale;
+  const pz = z => height / 2 + (z + 18.9) * scale;
   ctx.strokeStyle = '#63855820'; ctx.lineWidth = 1;
   for (let x = 0; x < width; x += 22) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
   for (let y = 0; y < height; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
@@ -477,7 +477,7 @@ function updateHUD() {
   if(extra){$('location-name').textContent=extra.name;$('location-number').textContent=extra.number;$('location-function').textContent=extra.function;$('location-deck').textContent=zone==='cupola'?'/ LOWER OBSERVATORY':zone==='exterior'?'/ EXTRAVEHICULAR':'/ PRESSURE LOCK';}
   const state=world.expansion.airlock;
   $('environment-label').textContent=transition?'VERTICAL TRANSFER':zone==='exterior'?'EVA / MAGNETIC BOOTS':zone==='cupola'?'NADIR / PLANET OBSERVATION':zone==='airlock'?'AIRLOCK ATMOSPHERE':'CABIN ATMOSPHERE';
-  $('environment-value').textContent=transition?'LADDER TRANSIT':zone==='exterior'?'SUIT SEALED · TETHER ATTACHED':zone==='airlock'?`${state.pressure.toFixed(1)} kPa · ${state.mode.toUpperCase()}`:zone==='cupola'?'PELAGIA · OCEAN WORLD':'101.3 kPa · SEALED';
+  $('environment-value').textContent=transition?'LADDER TRANSIT':zone==='exterior'?'SUIT SEALED · TETHER ATTACHED':zone==='airlock'?`${state.pressure.toFixed(1)} kPa · ${state.mode.toUpperCase()}`:zone==='cupola'?'PELAGIA · MINERAL WORLD':'101.3 kPa · SEALED';
   $('environment-hint').textContent=zone==='airlock'?'USE THE PRESSURE CONTROL TO OPEN THE OUTER HATCH':zone==='cupola'?'E AT THE LADDER · RETURN TO FORUM':zone==='exterior'?'FOLLOW THE GOLD HANDRAILS BACK TO A1':muted?'AUDIO MUTED · TOP RIGHT TO ENABLE':'PROCEDURAL SCORE · '+(room?.shortName||'TRANSIT').toUpperCase();
   const route = guidanceRoute();
   const next = route[0] || target.approach;
@@ -618,7 +618,7 @@ renderer.setAnimationLoop(now => {
 if (import.meta.env.DEV) {
   let pointClouds = 0; scene.traverse(object => { if (object.isPoints) pointClouds++; });
   window.__SENTIENT__ = {
-    snapshot: () => ({ layer, zone:currentZone(), transition:transition?{time:transition.time,descending:transition.descending}:null, audio:audio.getState(), expansion:world.expansion.getState(), expansionStats:world.expansion.stats, interactiveStats:world.interactive.stats, spaceStats:world.spaceStats, exteriorStats:world.exteriorStats, focusedDevice:focusedDevice?.id, devices:world.devices.map(d=>({id:d.id,roomId:d.roomId,zone:d.zone,label:d.label,x:d.x,y:d.y,z:d.z,state:typeof d.state==='function'?d.state():d.state})), raytrace: {state:photoState,error:photoError,...photoController?.stats()}, active, started, modal, position: { ...position }, elevation: floorHeight(), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, lighting: {quality,shadowsEnabled:renderer.shadowMap.enabled,shadowMapType:renderer.shadowMap.type,ssaoEnabled:!!ambientOcclusion?.enabled,bloomEnabled:!!bloom?.enabled,...world.lightingStats()}, lifeScienceStats:world.lifeScienceStats, quarterStats:world.quarterStats, fixtureStats:world.fixtureStats, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: guidanceRoute(), doors: (world.doors || []).map(d => ({ id: d.id, variant:d.variant, number:d.number, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
+    snapshot: () => ({ layer, zone:currentZone(), transition:transition?{time:transition.time,descending:transition.descending}:null, audio:audio.getState(), expansion:world.expansion.getState(), expansionStats:world.expansion.stats, interactiveStats:world.interactive.stats, spaceStats:world.spaceStats, exteriorStats:world.exteriorStats, corridorStats:world.corridorStats, roomCharacterStats:world.roomCharacterStats, focusedDevice:focusedDevice?.id, devices:world.devices.map(d=>({id:d.id,roomId:d.roomId,zone:d.zone,label:d.label,x:d.x,y:d.y,z:d.z,state:typeof d.state==='function'?d.state():d.state})), raytrace: {state:photoState,error:photoError,...photoController?.stats()}, active, started, modal, position: { ...position }, elevation: floorHeight(), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, lighting: {quality,shadowsEnabled:renderer.shadowMap.enabled,shadowMapType:renderer.shadowMap.type,ssaoEnabled:!!ambientOcclusion?.enabled,bloomEnabled:!!bloom?.enabled,...world.lightingStats()}, lifeScienceStats:world.lifeScienceStats, quarterStats:world.quarterStats, fixtureStats:world.fixtureStats, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: guidanceRoute(), doors: (world.doors || []).map(d => ({ id: d.id, variant:d.variant, number:d.number, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
     // Development-only positioning lets the browser test inspect every terminal.
     teleport: (x, z, facing = 0, deck = 'station', tilt = 0) => { layer=deck;transition=null;position = { x, z }; eyeHeight = floorHeight()+1.6; yaw = facing; pitch = tilt; },
     renderInfo: () => renderer.info,

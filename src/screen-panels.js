@@ -1,4 +1,4 @@
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Peripheral avionics banks: only solid cardinal walls, never an aisle or hatch. */
 export function addScreenPanels(ctx) {
@@ -98,7 +98,7 @@ export function addScreenPanels(ctx) {
   }
 
   function faceFor(module, index) {
-    const polygon = modulePolygon(module), a = polygon[index], b = polygon[(index + 1) % 8];
+    const { a, b } = moduleFacet(module, index);
     return { origin: { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, ry: -Math.atan2(b.z-a.z,b.x-a.x), length: Math.hypot(b.x-a.x,b.z-a.z), index };
   }
   function part(face, x, y, z, w, h, d, material = M.graphite, rz = 0) {

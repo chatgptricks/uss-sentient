@@ -1,6 +1,9 @@
 import * as THREE from 'three';
-import { MODULES, LINKS, modulePolygon } from './layout.js';
+import { MODULES, LINKS, modulePolygon, moduleEdges, moduleFacet, facetInset } from './layout.js';
+import { createPressureShoulderGeometry } from './roof-geometry.js';
 import { createDetailKit } from './detail-kit.js';
+import { addRoomCharacterDetails } from './room-character-details.js';
+import { addCorridorDetails } from './corridor-details.js';
 import { addHullDetails } from './hull-details.js';
 import { addDepartmentDetails } from './department-details.js';
 import { addLifeScienceDetails } from './life-science-details.js';
@@ -148,32 +151,26 @@ export async function createWorld(scene, rooms) {
     const underside = addMesh(new THREE.ExtrudeGeometry(shape, { depth: .18, bevelEnabled: false }), graphite);
     underside.rotation.x = -Math.PI / 2; underside.position.set(module.x, -.18, module.z);
   }
-  function quadGeometry(quads, material) {
-    const vertices = [];
-    for (const [a, b, c, d] of quads) for (const p of [a, b, c, a, c, d]) vertices.push(...p);
-    const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geometry.computeVertexNormals();
-    const mesh = addMesh(geometry, material); mesh.material.side = THREE.DoubleSide; return mesh;
-  }
-
   function pressureRoof(module) {
-    const points = modulePolygon(module), inner = points.map(p => ({ x: module.x + (p.x - module.x) * .77, z: module.z + (p.z - module.z) * .77 }));
-    const quads = [];
-    for (let i = 0; i < points.length; i++) {
-      const j = (i + 1) % points.length;
-      quads.push([[points[i].x, 2.56, points[i].z], [points[j].x, 2.56, points[j].z], [inner[j].x, 3.08, inner[j].z], [inner[i].x, 3.08, inner[i].z]]);
-      const a = points[i], b = points[j], center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      const len = Math.hypot(b.x - a.x, b.z - a.z), ry = -Math.atan2(b.z - a.z, b.x - a.x);
-      // A gasket at the shoulder seam and short lamps in the angled ceiling.
-      localBox(center, ry, 0, 2.56, .015, len, .055, .065, graphite);
-      if (i % 2 === 0) localBox(center, ry, 0, 2.85, (i===0||i===4?module.hz:module.hx)*.17+.16, Math.min(1.25, len - .35), .065, .14, whiteLight);
+    const edges=moduleEdges(module), points=modulePolygon(module);
+    const shoulders=addMesh(createPressureShoulderGeometry(points,module),hull);
+    shoulders.name=`${module.id} / fitted pressure shoulders`;
+    for (let i=0;i<edges.length;i++) {
+      const {a,b}=edges[i], center={x:(a.x+b.x)/2,z:(a.z+b.z)/2};
+      const length=Math.hypot(b.x-a.x,b.z-a.z),ry=-Math.atan2(b.z-a.z,b.x-a.x);
+      // A complete upper pressure wall seals the clipped interior finish panels.
+      localBox(center,ry,0,2.84,-.08,length,.56,.20,hull);
+      localBox(center,ry,0,2.56,.015,length,.055,.065,graphite);
+      if(edges[i].primary && edges[i].index%2===0) localBox(center,ry,0,2.85,facetInset(module,edges[i]),Math.min(1.25,length-.35),.065,.14,whiteLight);
     }
-    quadGeometry(quads, hull);
-    const roofShape = new THREE.Shape(inner.map(p => new THREE.Vector2(p.x - module.x, -(p.z - module.z))));
-    const roof = addMesh(new THREE.ShapeGeometry(roofShape), enamel); roof.rotation.x = Math.PI / 2; roof.rotation.z = Math.PI; roof.position.set(module.x, 3.077, module.z);
-    // A sealed structural lid behind the finish prevents light entering through
-    // a paper-thin ceiling at the star's shallow angle of incidence.
-    const roofShell = addMesh(new THREE.ExtrudeGeometry(roofShape,{depth:.18,bevelEnabled:false}),hull);
-    roofShell.rotation.x = -Math.PI/2; roofShell.position.set(module.x,3.08,module.z);
+    // The ceiling faces down using positive local Z. Mirroring a symmetric lid
+    // used to be harmless; authored asymmetric bodies need the exact footprint.
+    const roofShape=new THREE.Shape(points.map(p=>new THREE.Vector2(p.x-module.x,p.z-module.z)));
+    const roof=addMesh(new THREE.ShapeGeometry(roofShape),enamel);
+    roof.rotation.x=Math.PI/2;roof.position.set(module.x,3.077,module.z);
+    const shellShape=new THREE.Shape(points.map(p=>new THREE.Vector2(p.x-module.x,-(p.z-module.z))));
+    const roofShell=addMesh(new THREE.ExtrudeGeometry(shellShape,{depth:.18,bevelEnabled:false}),hull);
+    roofShell.rotation.x=-Math.PI/2;roofShell.position.set(module.x,3.08,module.z);
     // Low-profile overhead service spine, broken up by recessed access tiles.
     box(module.x, 3.00, module.z, .86, .14, 2.9, seal);
     for (const dz of [-.93, 0, .93]) box(module.x, 2.90, module.z + dz, .72, .095, .80, padding);
@@ -212,7 +209,7 @@ export async function createWorld(scene, rooms) {
     }
   }
 
-  function wallPanel(origin, ry, length, kind, room, index) {
+  function wallPanel(origin, ry, length, kind, room, index, panoramic = false) {
     const port = kind && room.ports.includes(kind);
     if (port) {
       const gap = 2.08, sideW = (length - gap) / 2;
@@ -220,7 +217,7 @@ export async function createWorld(scene, rooms) {
       localBox(origin, ry, 0, 2.5, -.08, gap, .2, .2, hull);
       return;
     }
-    const bridgeWindow = room.id === 'bridge' && [0,1,7].includes(index);
+    const bridgeWindow = (room.id === 'bridge' && [0,1,7].includes(index)) || (panoramic && length > 1.1);
     const smallWindow = index === 7 || (room.id === 'bridge' && index === 2);
     if (bridgeWindow || smallWindow) {
       porthole(origin, ry, length, bridgeWindow ? Math.min(index===0?4.5:2.3,length-.42) : Math.min(1.12, length - .46), bridgeWindow ? 1.72 : .94, bridgeWindow ? 1.62 : 1.73, bridgeWindow);
@@ -230,7 +227,7 @@ export async function createWorld(scene, rooms) {
     localBox(origin, ry, 0, .19, .035, length - .04, .30, .08, graphite);
     localBox(origin, ry, 0, 2.43, .025, length - .06, .08, .09, silver);
     // Recessed equipment faces and fabric-like covers integrated with the pressure wall.
-    if (index !== (room.id === 'bridge' ? 3 : 1)) {
+    if (index < 8 && length > .55 && index !== (room.id === 'bridge' ? 3 : 1)) {
       const w = Math.min(length - .24, index % 2 ? 1.05 : 1.62);
       localBox(origin, ry, 0, 1.45, .045, w, 1.43, .09, seal);
       localBox(origin, ry, 0, 1.45, .102, w - .1, 1.31, .045, index % 2 ? padding : enamel);
@@ -279,12 +276,14 @@ export async function createWorld(scene, rooms) {
 
   function moduleDetails(module, room) {
     // Distinct equipment inserts preserve each department without office furnishings.
-    const ry = Math.PI, origin = { x: module.x, z: module.z + module.hz };
+    const south = moduleFacet(module,4), origin = {x:(south.a.x+south.b.x)/2,z:(south.a.z+south.b.z)/2};
+    const ry = -Math.atan2(south.b.z-south.a.z,south.b.x-south.a.x);
     if (!module.ports.includes('S')) {
       const map = sign(room.name, room.function, room.number);
-      textPlane(map, 1.5, .375, origin.x, 2.1, origin.z - .145, ry);
+      textPlane(map, 1.5, .375, origin.x+Math.sin(ry)*.145, 2.1, origin.z+Math.cos(ry)*.145, ry);
     }
-    const rackX = module.x - module.hx + .28, rackZ = module.z + .6;
+    const west=moduleFacet(module,6), westYaw=-Math.atan2(west.b.z-west.a.z,west.b.x-west.a.x);
+    const rackX=(west.a.x+west.b.x)/2+Math.sin(westYaw)*.28, rackZ=(west.a.z+west.b.z)/2+Math.cos(westYaw)*.28+.6;
     if (!module.ports.includes('W')) {
       for (let i = 0; i < 4; i++) {
         box(rackX, .69 + i * .32, rackZ, .22, .24, .74, room.id === 'commons' ? padding : seal);
@@ -295,6 +294,11 @@ export async function createWorld(scene, rooms) {
       const capsule = addMesh(new THREE.CylinderGeometry(.24, .24, .88, 24), glass); capsule.position.set(module.x - 1.85, 1.35, module.z - .75);
       box(module.x - 1.85, .87, module.z - .75, .57, .10, .57, graphite);
       box(module.x - 1.85, 1.83, module.z - .75, .57, .1, .57, hull);
+      box(module.x-1.85,.425,module.z-.75,.32,.84,.32,graphite);
+      box(module.x-1.85,.055,module.z-.75,.56,.10,.56,hull);
+      for(const dx of [-.24,.24]) for(const dz of [-.24,.24]) {
+        kit.pipe([module.x-1.85+dx,.9,module.z-.75+dz],[module.x-1.85+dx,1.78,module.z-.75+dz],.018,silver,8);
+      }
       const sample = addMesh(new THREE.IcosahedronGeometry(.17), mat({ color: LIME, emissive: LIME, emissiveIntensity: .35, metalness: .4, roughness: .2 }));
       sample.position.copy(capsule.position); animated.push(t => { sample.rotation.y = t * .35; });
       colliders.push({ x: module.x - 1.85, z: module.z - .75, w: .6, d: .6 });
@@ -313,13 +317,11 @@ export async function createWorld(scene, rooms) {
     beginModule(module);
     const room = rooms.find(room => room.id === module.id);
     floorPolygon(module); pressureRoof(module);
-    const points = modulePolygon(module);
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i], b = points[(i + 1) % points.length], origin = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      const length = Math.hypot(b.x - a.x, b.z - a.z), ry = -Math.atan2(b.z - a.z, b.x - a.x);
-      wallPanel(origin, ry, length, ({ 0: 'N', 2: 'E', 4: 'S', 6: 'W' })[i], module, i);
-      // Small vertical hull seals at each octagonal corner.
-      box(a.x + (module.x - a.x) * .006, 1.36, a.z + (module.z - a.z) * .006, .055, 2.52, .055, silver);
+    for (const edge of moduleEdges(module)) {
+      const { a, b } = edge, origin = { x:(a.x+b.x)/2, z:(a.z+b.z)/2 };
+      const length = Math.hypot(b.x-a.x,b.z-a.z), ry = -Math.atan2(b.z-a.z,b.x-a.x);
+      wallPanel(origin, ry, length, edge.port, module, edge.index, edge.panoramic);
+      box(a.x+(module.x-a.x)*.006, 1.36, a.z+(module.z-a.z)*.006, .055, 2.52, .055, silver);
     }
     terminal(module, room); moduleDetails(module, room);
     endSection();
@@ -432,6 +434,7 @@ export async function createWorld(scene, rooms) {
     materials: {hull,enamel,padding,seal,graphite,silver,accent,whiteLight,blueLight,glass},
     resourceMaterials: materials, resourceGeometries: geometries, resourceTextures: textures };
   addHullDetails(detailContext);
+  const corridorStats=addCorridorDetails(detailContext);
   addDepartmentDetails(detailContext);
   addFinishDetails(detailContext);
   const fixtureStats = addFixtureDetails(detailContext);
@@ -440,6 +443,7 @@ export async function createWorld(scene, rooms) {
   const lifeScienceStats = addLifeScienceDetails(detailContext);
   const quarterStats = addQuarterDetails(detailContext);
   const interactive = addInteractiveDetails(detailContext);
+  const roomCharacterStats=addRoomCharacterDetails(detailContext);
   const expansion = addExpansion(detailContext);
   const exteriorStats = addExteriorDetails(detailContext);
   endSection();
@@ -466,7 +470,7 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    terminalMeshes, colliders, doors, expansion, interactive, spaceStats, exteriorStats, devices: [...interactive.devices,...expansion.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
+    terminalMeshes, colliders, doors, expansion, interactive, spaceStats, exteriorStats, corridorStats, roomCharacterStats, devices: [...interactive.devices,...expansion.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
     animate(time, dt = 1 / 60, player, motionScale = 1) {

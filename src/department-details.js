@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /**
  * Department-specific flight hardware. The seven real Sentient functions inform
@@ -19,8 +19,7 @@ export function addDepartmentDetails(ctx) {
   const statistics = { panels: 0, displays: 0, detailParts: 0 };
 
   function facet(module, side) {
-    const points = modulePolygon(module), index = side > 0 ? 3 : 5;
-    const a = points[index], b = points[index + 1];
+    const { a, b } = moduleFacet(module, side > 0 ? 3 : 5);
     return {
       origin: { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 },
       yaw: -Math.atan2(b.z - a.z, b.x - a.x),

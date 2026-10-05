@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Shared exterior batches: thermal blankets, EVA hardware and utility structure. */
 export function addExteriorDetails(ctx) {
@@ -30,7 +30,7 @@ export function addExteriorDetails(ctx) {
   const foil=mat({color:0x9f926c,roughness:.58,metalness:.43});foil.name='Exterior / muted multilayer foil';
   const reserved={0:'N',2:'E',4:'S',6:'W'};
   function facet(m,index) {
-    const polygon=modulePolygon(m),a=polygon[index],b=polygon[(index+1)%8];
+    const {a,b}=moduleFacet(m,index);
     return {origin:{x:(a.x+b.x)/2,z:(a.z+b.z)/2},ry:-Math.atan2(b.z-a.z,b.x-a.x)+Math.PI,elevation:m.elevation,length:Math.hypot(b.x-a.x,b.z-a.z),index};
   }
   function available(m,index) {

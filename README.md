@@ -2,11 +2,13 @@
 
 [Play the game](https://chatgptricks.github.io/uss-sentient/) · [GitHub repository](https://github.com/chatgptricks/uss-sentient)
 
-A Three.js exploration game inside an enclosed, ISS-inspired spacecraft. Seven Sentient departments occupy distinct off-white pressure modules, joined by narrow tubes, fourteen automatic rounded hatches, three stair corridors and a sloping habitat connection. The expanded Bridge is an elevated observation deck with three angled viewing bays overlooking a neon-lime star.
+A Three.js exploration game inside an enclosed, ISS-inspired spacecraft. Seven Sentient departments occupy distinct off-white pressure modules, joined by narrow tubes, fourteen automatic rounded hatches, three stair corridors and a sloping habitat connection. The expanded Bridge is an elevated observation deck with an offset, faceted panoramic prow overlooking a neon-lime star.
 
 The approved modular layout has developed into a detailed interior: structural ribs, service trays, pipe bundles, equipment cabinets, fasteners, instruments and department-specific screens. Distant stars use an infinite background without walking parallax; observation glass does not reflect cabin lamps as false nearby stars.
 
-Each quarter has its own equipment: Arrival has stowed EVA gear and supply lockers; the Floor has a fabrication arm; the Archive has data towers; the Commons grows plants in hydroponic racks; the Forum has a shared tactical display and folding meeting station; the Lab contains a microscope, centrifuge and specimens; and the Bridge has restrained pilot seats behind its consoles. Equipment stays outside the main walking routes.
+Each quarter has its own equipment: Arrival has stowed EVA gear and supply lockers; the Floor has a fabrication arm; the Archive has data towers; the Commons grows plants in hydroponic racks; the Forum has a shared tactical display and folding meeting station; the Lab contains a microscope, centrifuge and specimens; and the Bridge has restrained pilot seats behind its consoles. Equipment stays outside the main walking routes. The physical hulls now differ beyond their proportions: Arrival has an offset docking nose, Archive a stepped data vault, Floor an L-shaped fabrication bay, Lab a specimen lobe, Forum a diagonal strategy annex, Commons a crescent habitat and Bridge a flared observation prow. The same asymmetric polygons drive the floors, walls, roofs, walking bounds and map; equipment follows semantic wall faces rather than assuming eight vertices.
+
+Connecting tubes carry distinct service equipment: oxygen canisters, rescue packs, closed maintenance tables, cartridge racks, inspection recesses, avionics cassettes and shared-atlas diagnostic maps. Wall additions stay within 15 cm of the hull; stair treads and hatch clearances remain free.
 
 Performance is the default quality on desktop and mobile. It renders directly without shadow maps, ambient occlusion or bloom, using six nearby practical lamps and two screen lights. Balanced and High are optional settings that add local shadows, window sunlight, contact shading and bloom with a bounded shadow budget. Distinct surface roughness brings out seams, equipment depth and metal edges in every mode.
 
@@ -24,9 +26,9 @@ Seven operable department panels control a suit test, archive core, fabrication 
 
 - **Arrival → A1 airlock:** the east hatch leads to the suit bay. Operate the pressure console, wait for depressurization, then walk through the exterior hatch. The outer and inner hatches are interlocked. Return to the bay and cycle again to restore cabin pressure.
 - **EVA gantry:** magnetic boots keep movement on the gold-railed exterior catwalk. Explore solar wings, radiator assemblies, thermal panels and a wider lookout platform; return by the same route.
-- **Forum 05 → lower cupola:** press E beside the round floor hatch. It opens for an animated ladder descent to a spherical glass observation deck 4.8 metres below Forum. A transparent nadir floor overlooks the ocean planet Pelagia. Operate the survey instrument or use the ladder control to climb back.
+- **Forum 05 → lower cupola:** press E beside the round floor hatch. It opens for an animated ladder descent to a spherical glass observation deck 4.8 metres below Forum. A transparent nadir floor overlooks the alien mineral planet Pelagia. Eight tapered pressure arches, glazing gaskets, an overhead service ring, restrained perch seats and a supported survey console frame the view. Click the survey screen to cycle mineral, thermal and atmospheric channels, or use the ladder control to climb back.
 
-The map includes all three destinations and shows the lower deck under Forum. A translation-independent sky contains 15,600 distant stars. Pelagia has procedural oceans, land, weather and a solar terminator. The planetary orbit is represented in the station's reference frame, rather than simulated orbital dynamics. New extension lamps reuse the same six-light pool; Performance still allocates no shadow/AO/bloom buffers.
+The map includes all three destinations and shows the lower deck under Forum. A translation-independent sky contains 15,600 distant stars. Pelagia has violet mineral plates, copper terraces, luminous canyon faults, mineral haze, a solar terminator and a tilted dusty ring. Its surface is baked once; the planet adds no dynamic lamps. The planetary orbit is represented in the station's reference frame, rather than simulated orbital dynamics. New extension lamps reuse the same six-light pool; Performance still allocates no shadow/AO/bloom buffers.
 
 `npm run test:expansion` verifies the real two-way airlock journey, cupola descent/ascent, all seven clickable panels, map destinations, room audio and rendering. `npm run test:audio` runs standalone real Web Audio tests (gesture unlocking, audible output, spatial cues, profile changes, fixed allocations, muting and disposal). Set `AUDIO_GAME_URL=http://127.0.0.1:5173` to include mute preference persistence in the game UI.
 
@@ -49,6 +51,8 @@ npm test
 The build produces `dist/`. The navigation tests cover polygonal hull boundaries, all department routes, hatch collisions, stair and ramp elevations, wall sliding and saved-progress recovery. A shared metre-scale plan in `src/layout.js` drives the world, collision and both maps.
 
 With the dev server running and Google Chrome installed, `npm run test:browser` verifies keyboard movement, automatic hatch opening and closing, physical stair/ramp traversal in both directions, camera height, room access, all terminal interactions, saved progress, the deck map and emulated touch controls. Screenshots are written to `test-results/`.
+
+`npm run test:architecture` checks physical access into every new hull extension with actual furniture bounds and captures all seven room profiles, connecting halls and map.
 
 `npm run test:lighting` checks lighting quality settings and captures matched room views. `node tests/doors.mjs` captures all seven closed hatch designs in the default Performance mode. `npm run test:quarters` verifies department equipment, collision bounds and all 49 department routes, then captures the plants, instruments, meeting station, fabrication arm, pilot seats and other props.
 

@@ -1,4 +1,4 @@
-import { modulePolygon } from './layout.js';
+import { moduleFacet, facetInset } from './layout.js';
 
 /** Shallow mechanical surfaces for the cabin lighting to rake across.
  * All parts are batched through the existing builders and sit above head height.
@@ -56,18 +56,16 @@ export function addFixtureDetails(ctx) {
 
   for (const module of MODULES) {
     ctx.beginModule(module);
-    const polygon = modulePolygon(module);
     for (const index of [0, 2, 4, 6]) {
-      const a = polygon[index], b = polygon[(index + 1) % polygon.length];
+      const { a, b } = moduleFacet(module, index);
       const origin = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
       const ry = -Math.atan2(b.z - a.z, b.x - a.x);
       const length = Math.hypot(b.x - a.x, b.z - a.z);
-      const halfExtent = index === 0 || index === 4 ? module.hz : module.hx;
       // Shoulder rises .52m while moving inward by .23 times the wall radius.
       // Clearance includes the housing's .155m half-depth and top at y=2.945,
       // so its outer lip never disappears into the angled hull panel.
       // Existing world emitters use this same inset and retain their y=2.85.
-      const inset = halfExtent * .17 + .16;
+      const inset = facetInset(module,moduleFacet(module,index));
       moduleFixture(origin, ry, Math.min(1.25, length - .35), inset);
     }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 // Original CC0 Kenney meshes, downloaded from the author's official packs.
 // Source archives, licenses, exact selected files and modifications are recorded
@@ -125,7 +125,7 @@ export async function addImportedProps(ctx) {
   }
 
   function upperDisplay(module, parent, type, facetIndex, width, tangent = 0, y = 2.04) {
-    const polygon = modulePolygon(module), a = polygon[facetIndex], b = polygon[(facetIndex + 1) % 8];
+    const { a, b } = moduleFacet(module, facetIndex);
     const yaw = -Math.atan2(b.z - a.z, b.x - a.x), c = Math.cos(yaw), s = Math.sin(yaw);
     const prefab = prefabs.get(type), depth = prefab.size.z * width / prefab.size.x;
     const forward = depth / 2 + .18;
@@ -138,6 +138,11 @@ export async function addImportedProps(ctx) {
   for (const module of MODULES) {
     const parent = beginModule(module), id = module.id;
     const p = (type, x, z, width, yaw = 0, y = .04, floor = true, label = '') => place(module, parent, type, x, z, width, yaw, y, floor, label);
+    const bayProp=(type,index,tangent,inset,width,label)=>{
+      const {a,b}=moduleFacet(module,index),yaw=-Math.atan2(b.z-a.z,b.x-a.x);
+      p(type,(a.x+b.x)/2+Math.cos(yaw)*tangent+Math.sin(yaw)*inset-module.x,
+        (a.z+b.z)/2-Math.sin(yaw)*tangent+Math.cos(yaw)*inset-module.z,width,yaw,.07,true,label);
+    };
     if (id === 'front-door') {
       p('case', -.67, module.hz - .57, .68, 0, .04, true, 'Arrival cargo case');
       p('wideCase', .68, module.hz - .57, .62, 0, .04, true, 'Transit supply case');
@@ -154,23 +159,23 @@ export async function addImportedProps(ctx) {
     } else if (id === 'floor') {
       p('largeGenerator', -module.hx + .73, -.33, .97, Math.PI / 2, .05, true, 'Production power unit');
       p('generator', -module.hx + .64, .97, .82, Math.PI / 2, .06, true, 'Instrument power supply');
-      p('wideComputer', -.64, module.hz - .59, .95, Math.PI, .75, true, 'Production editing console');
+      p('wideComputer', -.25, module.hz + 1.35, .95, Math.PI, .75, true, 'Production editing console');
       p('monitor', .66, module.hz - .48, .84, Math.PI, .78, true, 'Render status monitor');
       p('openCase', 1.85, module.hz - .54, .53, Math.PI / 2, .05, true, 'Production tool case');
       upperDisplay(module, parent, 'wideDisplay', 5, .48, 0, 2.10);
     } else if (id === 'lab') {
       p('battery', -.72, -module.hz + .64, .63, 0, .08, true, 'Analyzer battery assembly');
       p('generator', .30, -module.hz + .64, .69, 0, .08, true, 'Sample analyzer drive');
-      p('monitor', -module.hx + .40, 1.13, .64, Math.PI / 2, .81, true, 'Experiment readout');
-      p('flatCase', -module.hx + .52, .1, .55, Math.PI / 2, .04, true, 'Sealed sample case');
+      p('monitor', -module.hx - 1.05, 1.13, .64, Math.PI / 2, .81, true, 'Experiment readout');
+      p('flatCase', -module.hx - 1.03, -.8, .55, Math.PI / 2, .04, true, 'Sealed sample case');
       upperDisplay(module, parent, 'wallDisplay', 3, .44, -.34, 2.11);
       upperDisplay(module, parent, 'wallDisplay', 3, .44, .34, 2.11);
     } else if (id === 'commons') {
       p('console', module.hx - .44, -.72, 1.08, -Math.PI / 2, .07, true, 'Shared account console');
       p('computer', module.hx - .43, .67, .59, -Math.PI / 2, .82, true, 'Community communications');
-      p('battery', -1.04, module.hz - .52, .59, Math.PI, .07, true, 'Life support reserve');
-      p('drum', .0, module.hz - .48, .54, Math.PI, .07, true, 'Resource cartridge');
-      p('openCase', 1.15, module.hz - .60, .54, Math.PI / 2, .04, true, 'Shared equipment stowage');
+      bayProp('battery',4,-.75,.50,.54,'Life support reserve');
+      bayProp('drum',4,0,.50,.54,'Resource cartridge');
+      bayProp('openCase',4,.75,.50,.50,'Shared equipment stowage');
       upperDisplay(module, parent, 'wideDisplay', 3, .50, 0, 2.11);
     } else if (id === 'forum') {
       // Four-way traffic keeps the Forum floor empty. Imported consoles are
@@ -179,10 +184,15 @@ export async function addImportedProps(ctx) {
       upperDisplay(module, parent, 'wideDisplay', 3, .44, .33, 2.11);
       upperDisplay(module, parent, 'wideDisplay', 5, .44, -.33, 2.11);
       upperDisplay(module, parent, 'wideDisplay', 5, .44, .33, 2.11);
-      p('radio', module.hx - .68, module.hz - .88, .30, -Math.PI * .75, 2.16, false, 'Strategy communications array');
+      upperDisplay(module,parent,'radio',3,.30,0,2.16);
     } else if (id === 'bridge') {
       // Low front console bank preserves the tall observation-window sightline.
-      for (const x of [-1.35, 0, 1.35]) p('wideComputer', x, -module.hz + .70, 1.10, 0, .62, true, 'Forward flight console');
+      const prow=moduleFacet(module,0),prowYaw=-Math.atan2(prow.b.z-prow.a.z,prow.b.x-prow.a.x);
+      for (const tangent of [-1.05,0,1.05]) {
+        const x=(prow.a.x+prow.b.x)/2+Math.cos(prowYaw)*tangent+Math.sin(prowYaw)*.85-module.x;
+        const z=(prow.a.z+prow.b.z)/2-Math.sin(prowYaw)*tangent+Math.cos(prowYaw)*.85-module.z;
+        p('wideComputer',x,z,1.0,prowYaw,.62,true,'Forward flight console');
+      }
       for (const z of [-1.15, .65]) {
         p('screenConsole', module.hx - .53, z, 1.22, -Math.PI / 2, .06, true, 'Orbital tracking station');
         p('console', -module.hx + .56, z, 1.27, Math.PI / 2, .06, true, 'Campaign command station');

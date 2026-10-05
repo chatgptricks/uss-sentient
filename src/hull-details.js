@@ -1,4 +1,4 @@
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Fixed spacecraft detailing. It adds no collision volumes or moving door parts. */
 export function addHullDetails(ctx) {
@@ -17,19 +17,17 @@ export function addHullDetails(ctx) {
   const serviceMaps = new Map();
 
   function facets(module) {
-    const vertices = modulePolygon(module).map(p => [p.x - module.x, p.z - module.z]);
-    return vertices.map((p, i) => {
-      const q = vertices[(i + 1) % 8];
+    return Array.from({length:8}, (_, i) => {
+      const {a,b} = moduleFacet(module, i);
       return {
-        index: i,
-        origin: { x: module.x + (p[0] + q[0]) / 2, z: module.z + (p[1] + q[1]) / 2 },
-        ry: -Math.atan2(q[1] - p[1], q[0] - p[0]),
-        length: Math.hypot(q[0] - p[0], q[1] - p[1]),
-        port: module.ports.includes(({ 0: 'N', 2: 'E', 4: 'S', 6: 'W' })[i]),
-        window: i === 7 || (module.id === 'bridge' && [0,1,2].includes(i)),
+        index: i, origin: { x:(a.x+b.x)/2, z:(a.z+b.z)/2 },
+        ry:-Math.atan2(b.z-a.z,b.x-a.x), length:Math.hypot(b.x-a.x,b.z-a.z),
+        port:module.ports.includes(({0:'N',2:'E',4:'S',6:'W'})[i]),
+        window:i===7 || (module.id==='bridge' && [0,1,2].includes(i)),
       };
     });
   }
+
   function labelMap(title, sub = '', warning = false) {
     const key = `${title}|${sub}|${warning}`;
     if (!serviceMaps.has(key)) serviceMaps.set(key, texture(512, 128, (g, w, h) => {

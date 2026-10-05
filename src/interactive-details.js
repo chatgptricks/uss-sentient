@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Local, fictional flight instruments. Nothing contacts a Sentient service. */
 export function addInteractiveDetails(ctx) {
@@ -27,7 +27,7 @@ export function addInteractiveDetails(ctx) {
   };
 
   function face(m, index, offset) {
-    const polygon = modulePolygon(m), a = polygon[index], b = polygon[(index + 1) % 8];
+    const { a, b } = moduleFacet(m, index);
     const yaw = -Math.atan2(b.z - a.z, b.x - a.x);
     return { origin: { x: (a.x + b.x) / 2 + offset * Math.cos(yaw), z: (a.z + b.z) / 2 - offset * Math.sin(yaw) }, yaw };
   }

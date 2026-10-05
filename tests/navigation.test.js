@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rooms } from '../src/rooms.js';
-import { MODULES, LINKS, modulePolygon, insidePolygon, routeTo, surfaceHeight } from '../src/layout.js';
+import { MODULES, LINKS, modulePolygon, moduleEdges, moduleFacet, HULL_PROFILES, insidePolygon, routeTo, surfaceHeight } from '../src/layout.js';
 import { PLAYER_RADIUS, START, createWalkable, canWalk, movePlayer, readProgress } from '../src/navigation.js';
 
 const areas = createWalkable(rooms);
@@ -26,7 +26,7 @@ test('all seven compact modules and their terminal approaches match the shared h
   for (const room of rooms) {
     const module = MODULES.find(module => module.id === room.id);
     assert.deepEqual([room.x, room.z, room.terminal, room.approach], [module.x, module.z, module.terminal, module.approach]);
-    assert.equal(modulePolygon(module).length, 8);
+    assert.ok(modulePolygon(module).length >= 11, `${module.id} has an authored irregular boundary`);
     assert.ok(insidePolygon(module.approach.x, module.approach.z, modulePolygon(module)));
     assert.ok(canWalk(room.approach.x, room.approach.z, areas));
   }
@@ -106,7 +106,7 @@ test('tube-to-module seams stay open while tube walls reject body clipping', () 
   }
 });
 
-test('octagonal chamfers and unconnected hull faces are solid', () => {
+test('pressure-hull corners and unconnected faces are solid', () => {
   for (const module of MODULES) {
     const polygon = modulePolygon(module);
     const extentX = Math.max(...polygon.map(point => Math.abs(point.x - module.x)));
@@ -133,7 +133,7 @@ test('movement slides along narrow tubes and cannot tunnel out of the station', 
   const arrival = MODULES.find(module => module.id === 'front-door');
   const southWall = Math.max(...modulePolygon(arrival).map(point => point.z));
   assert.ok(escaped.z < southWall - PLAYER_RADIUS + 0.001);
-  assert.ok(escaped.z > southWall - PLAYER_RADIUS - 0.2);
+  assert.equal(canWalk(escaped.x, escaped.z+.16, areas), false, 'A single large stride stops against the actual angled south wall');
   assert.ok(canWalk(escaped.x, escaped.z, areas));
 });
 
@@ -146,6 +146,32 @@ test('unequal modules use their own footprint and all four deck elevations', () 
     assert.equal(surfaceHeight(module.approach), module.elevation, `${module.id} terminal approach elevation`);
     assert.equal(surfaceHeight(module.terminal), module.elevation, `${module.id} console floor elevation`);
   }
+});
+
+test('seven asymmetric bays have sealed boundaries and remain reachable beyond the old hull', () => {
+  const signatures=new Set();
+  for (const m of MODULES) {
+    const points=modulePolygon(m),edges=moduleEdges(m),profile=HULL_PROFILES[m.id];
+    signatures.add(points.map(p=>`${((p.x-m.x)/m.hx).toFixed(3)},${((p.z-m.z)/m.hz).toFixed(3)}`).join(';'));
+    const reflected=points.every(p=>points.some(q=>Math.abs(q.x-(2*m.x-p.x))<.01&&Math.abs(q.z-p.z)<.01));
+    assert.equal(reflected,false,`${m.id} is asymmetric`);
+    for (const [i,edge] of edges.entries()) {
+      assert.deepEqual(edge.b,edges[(i+1)%edges.length].a,'All hull surfaces form a closed loop');
+      const dx=edge.b.x-edge.a.x,dz=edge.b.z-edge.a.z,len=Math.hypot(dx,dz);
+      assert.ok(len>.15,'No degenerate hull edges');
+      if (!edge.port || !m.ports.includes(edge.port)) {
+        assert.equal(canWalk((edge.a.x+edge.b.x)/2+dz/len*.31,(edge.a.z+edge.b.z)/2-dx/len*.31,areas),false,`${m.id} wall has no accidental exit`);
+      }
+    }
+    const {a,b}=moduleFacet(m,profile.face),dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
+    const bay={x:(a.x+b.x)/2-dz/len*.9,z:(a.z+b.z)/2+dx/len*.9};
+    assert.ok(canWalk(bay.x,bay.z,areas),`${m.id} bay has standing clearance`);
+    assert.ok(Math.abs(bay.x-m.x)>m.hx || Math.abs(bay.z-m.z)>m.hz,`${m.id} expands the physical room`);
+    walkTo(m,bay);
+    let returning={...bay};
+    for (const waypoint of routeTo(returning,'front-door')) returning=walkTo(returning,waypoint);
+  }
+  assert.equal(signatures.size,7,'Room outlines differ after removing position and scale');
 });
 
 test('stair and ramp heights meet both decks and change monotonically in both directions', () => {

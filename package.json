@@ -10,6 +10,7 @@
     "test": "node --test tests/*.test.js",
     "test:browser": "node tests/browser.mjs",
     "test:lighting": "node tests/lighting.mjs",
+    "test:architecture": "node tests/architecture.mjs",
     "test:quarters": "node tests/quarters.mjs",
     "test:raytrace": "node tests/raytrace.mjs",
     "test:doors": "node tests/doors.mjs",

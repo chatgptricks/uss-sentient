@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import { MODULES, LINKS } from './layout.js';
+import { MODULES, LINKS, moduleFacet, facetInset } from './layout.js';
 
 /** Local practical lamps, a hull-masked star, and a bounded shadow budget. */
 export function createStationLighting(root) {
@@ -17,13 +17,16 @@ export function createStationLighting(root) {
       aim:new THREE.Vector3(...aim),reach,angle});
   }
   for (const m of MODULES) {
-    const west = m.hx - (m.hx * .17 + .16), north = m.hz - (m.hz * .17 + .16);
+    const lampPosition=index=>{
+      const edge=moduleFacet(m,index),{a,b}=edge,ry=-Math.atan2(b.z-a.z,b.x-a.x),inset=facetInset(m,edge);
+      return [(a.x+b.x)/2+Math.sin(ry)*inset,m.elevation+2.73,(a.z+b.z)/2+Math.cos(ry)*inset];
+    };
     const color = m.id === 'lab' || m.id === 'archive' ? 0xe2ecff : m.id === 'commons' ? 0xffe5c2 : 0xffecd6;
     const power = {bridge:64,lab:38,archive:32,commons:36,floor:40,forum:36,'front-door':34}[m.id];
     spot(`${m.id} / west ceiling practical`, color, power,
-      [m.x-west,m.elevation+2.73,m.z], [m.x+.4,m.elevation+.45,m.z-.35], Math.max(7,m.hx*2));
+      lampPosition(6), [m.x+.4,m.elevation+.45,m.z-.35], Math.max(7,m.hx*2));
     spot(`${m.id} / north ceiling practical`, 0xdceaff, power*.48,
-      [m.x,m.elevation+2.73,m.z-north], [m.x-.2,m.elevation+.30,m.z+.5], Math.max(7,m.hz*2));
+      lampPosition(0), [m.x-.2,m.elevation+.30,m.z+.5], Math.max(7,m.hz*2));
     // A display is a luminous rectangle: light leaves its face, so it cannot
     // reflect a fictitious point bulb back into the display itself.
     const normal = {x:Math.sin(m.terminalYaw),z:Math.cos(m.terminalYaw)};
@@ -92,7 +95,7 @@ export function createStationLighting(root) {
   sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
   root.add(sun,sun.target); root.updateMatrixWorld(true); sun.shadow.updateMatrices(sun);
   const bounds = new THREE.Box3();
-  for (const x of [-30,30]) for (const y of [-7,6]) for (const z of [-40.5,4]) {
+  for (const x of [-30,30]) for (const y of [-7,6]) for (const z of [-44,6]) {
     bounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(sun.shadow.camera.matrixWorldInverse));
   }
   Object.assign(sun.shadow.camera,{left:bounds.min.x-.4,right:bounds.max.x+.4,bottom:bounds.min.y-.4,top:bounds.max.y+.4,near:Math.max(.1,-bounds.max.z-1),far:-bounds.min.z+1});

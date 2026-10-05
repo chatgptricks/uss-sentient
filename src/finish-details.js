@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 // Final close-range pass: hardware that still holds up beside a hatch or window.
 export function addFinishDetails(ctx) {
@@ -39,9 +39,8 @@ export function addFinishDetails(ctx) {
   }
 
   const bridge=MODULES.find(m=>m.id==='bridge');beginModule(bridge);
-  const points=modulePolygon(bridge);
   for(const index of [0,1,7]) {
-    const a=points[index],b=points[(index+1)%8],ry=-Math.atan2(b.z-a.z,b.x-a.x);
+    const {a,b}=moduleFacet(bridge,index),ry=-Math.atan2(b.z-a.z,b.x-a.x);
     const origin={x:(a.x+b.x)/2,z:(a.z+b.z)/2};
     const titles={0:'STELLAR TELEMETRY',1:'ORBITAL SOLUTION',7:'DEEP FIELD ARRAY'};
     const display=texture(1024,256,(g,w,h)=>{

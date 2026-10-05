@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Secured botanical and laboratory hardware; all coordinates are local deck heights. */
 export function addLifeScienceDetails(ctx) {
@@ -16,7 +16,7 @@ export function addLifeScienceDetails(ctx) {
   const v = new THREE.Vector3(), matrix = new THREE.Matrix4(), quat = new THREE.Quaternion();
 
   function face(module, index, offset = 0) {
-    const points = modulePolygon(module), a = points[index], b = points[(index + 1) % 8];
+    const { a, b } = moduleFacet(module, index);
     const ry = -Math.atan2(b.z - a.z, b.x - a.x);
     return { origin: { x: (a.x + b.x) / 2 + offset * Math.cos(ry), z: (a.z + b.z) / 2 - offset * Math.sin(ry) }, ry };
   }

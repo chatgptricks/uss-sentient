@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { modulePolygon } from './layout.js';
+import { moduleFacet } from './layout.js';
 
 /** Department-specific spacecraft equipment, authored around the central aisles. */
 export function addQuarterDetails(ctx) {
@@ -14,7 +14,7 @@ export function addQuarterDetails(ctx) {
   const LP = (f, ...args) => { stats.parts++; kit.localPipe(f.origin, f.ry, ...args); };
   const point = (f, x, y, z) => kit.toWorld(f.origin, f.ry, [x, y, z]);
   function facet(m, index) {
-    const points = modulePolygon(m), a = points[index], b = points[(index + 1) % 8];
+    const { a, b } = moduleFacet(m, index);
     return { origin: { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, ry: -Math.atan2(b.z - a.z, b.x - a.x) };
   }
   function frame(m, x, z, ry = 0) { return { origin: { x: m.x + x, z: m.z + z }, ry }; }
@@ -100,14 +100,14 @@ export function addQuarterDetails(ctx) {
   }
 
   function fabrication(m) {
-    const f = frame(m, -2.01, 1.77, Math.PI);
+    const f = frame(m, -1.75, 3.3, Math.PI);
     L(f, 0, .86, 0, 1.23, .105, .69, M.enamel);
     L(f, 0, .918, 0, 1.10, .018, .59, M.graphite);
     for (const x of [-.49,.49]) {
       L(f, x, .43, 0, .115, .79, .47, M.silver);
       L(f, x, .055, 0, .30, .07, .53, M.graphite);
     }
-    blocker(m, 'fabrication-bench', -2.01, 1.77, 1.25, .71);
+    blocker(m, 'fabrication-bench', -1.75, 3.3, 1.25, .71);
     // Fixed articulated tool arm: shoulder, elbow, wrist and parallel gripper.
     const joints = [[.32,1.01,-.09],[.32,1.45,-.09],[-.03,1.80,-.03],[-.35,1.46,.13]];
     LP(f, [.32,.94,-.09], [.32,1.12,-.09], .14, M.graphite, 16);

@@ -214,50 +214,191 @@ export function addExpansion(ctx) {
   for(const side of [-1,1])kit.pipe([h.x+side*.40,-4.65,h.z-.50],[h.x+side*.40,-.05,h.z-.50],.034,M.silver);
   for(let y=-4.5;y<0;y+=.30)kit.pipe([h.x-.4,y,h.z-.5],[h.x+.4,y,h.z-.5],.029,amber);
   const y=CUPOLA.elevation,cz=CUPOLA.z;
+  const cupolaStats={arches:8,windowFasteners:0,serviceCovers:16,perches:2,consoles:1,displays:2,lights:0};
+  const cupolaColliders=[];
+  const upholstery=mat({color:0x849b96,roughness:.96,metalness:0});
+  const instrumentGlow=mat({color:0x9fbeb6,emissive:0x79b8b4,emissiveIntensity:.7,roughness:.4});
+  const point=(angle,radius,height)=>[Math.cos(angle)*radius,height,cz+Math.sin(angle)*radius];
+  const facing=angle=>-angle-Math.PI/2;
+  function cupolaPart(origin,yaw,x,height,z,w,h,d,material,rz=0) {
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    box(origin.x+x*c+z*s,height,origin.z-x*s+z*c,w,h,d,material,yaw,rz);
+  }
+  function hoop(radius,height,thickness,material,segments=64) {
+    for(let i=0;i<segments;i++)kit.pipe(point(i*Math.PI*2/segments,radius,height),point((i+1)*Math.PI*2/segments,radius,height),thickness,material,8);
+  }
   // The Forum underside caps the top of the vessel. Leave the real ladder
   // aperture open; a complete sphere would put glazing across the floor hatch.
   const capY=-.22,capAngle=Math.acos((capY+3.35)/3.48);
   const sphere=addMesh(new THREE.SphereGeometry(3.48,48,32,0,Math.PI*2,capAngle,Math.PI-capAngle),glazing);sphere.position.set(0,-3.35,cz);sphere.name='Nadir cupola panoramic spherical pressure glazing';
   ring(Math.sin(capAngle)*3.48,0,capY,cz,M.enamel,Math.PI/2,.065);
-  // Meridians and latitude hoops express a pressure vessel, with a glazed nadir floor.
-  for(let i=0;i<10;i++) {
-    const angle=i*Math.PI/5;
-    for(let j=0;j<31;j++) {
-      const p=capAngle+j*(Math.PI-capAngle)/32,q=capAngle+(j+1)*(Math.PI-capAngle)/32;
-      kit.pipe([Math.sin(p)*3.49*Math.cos(angle),-3.35+Math.cos(p)*3.49,cz+Math.sin(p)*3.49*Math.sin(angle)],
-        [Math.sin(q)*3.49*Math.cos(angle),-3.35+Math.cos(q)*3.49,cz+Math.sin(q)*3.49*Math.sin(angle)],.065,M.enamel);
+  // Tapered rectangular pressure arches have broad enamel faces, narrow edges,
+  // and separate dark glazing seals. One merged mesh replaces the wire cage.
+  const archVertices=[];
+  const quad=(a,b,c,d)=>{for(const p of [a,c,b,a,d,c])archVertices.push(...p);};
+  function archPoint(angle,polar,side,depth) {
+    const halfWidth=.098+.065*Math.abs(Math.cos(polar)),radius=3.48+depth;
+    return [Math.sin(polar)*radius*Math.cos(angle)-Math.sin(angle)*side*halfWidth,
+      -3.35+Math.cos(polar)*radius,cz+Math.sin(polar)*radius*Math.sin(angle)+Math.cos(angle)*side*halfWidth];
+  }
+  for(let i=0;i<8;i++) {
+    const angle=i*Math.PI/4;
+    for(let j=0;j<36;j++) {
+      const p=capAngle+j*(Math.PI-capAngle)/36,q=capAngle+(j+1)*(Math.PI-capAngle)/36;
+      const a=archPoint(angle,p,-1,-.11),b=archPoint(angle,p,1,-.11),c=archPoint(angle,q,1,-.11),d=archPoint(angle,q,-1,-.11);
+      const e=archPoint(angle,p,-1,.04),f=archPoint(angle,p,1,.04),g=archPoint(angle,q,1,.04),k=archPoint(angle,q,-1,.04);
+      quad(a,b,c,d);quad(f,e,k,g);quad(e,a,d,k);quad(b,f,g,c);
+      for(const side of [-1,1])kit.pipe(archPoint(angle,p,side,-.032),archPoint(angle,q,side,-.032),.037,M.graphite,8);
+    }
+    // Glazing corners are clamped where each arch meets a pressure hoop.
+    for(const height of [y+.22,y+2.30,-5.4]) {
+      const radius=Math.sqrt(3.48**2-(height+3.35)**2)-.12,yaw=facing(angle);
+      for(const side of [-1,1])for(const dy of [-.074,.074]) {
+        const x=Math.cos(angle)*radius-Math.sin(angle)*side*.065,z=cz+Math.sin(angle)*radius+Math.cos(angle)*side*.065;
+        kit.bolt(x,height+dy,z,yaw,M.silver,.025);cupolaStats.windowFasteners++;
+      }
     }
   }
-  for(const latitude of [-5.4,-4.7,-2.7,-1.65])ring(Math.sqrt(3.48**2-(latitude+3.35)**2),0,latitude,cz,M.graphite,Math.PI/2,.055);
+  const archGeometry=new THREE.BufferGeometry();archGeometry.setAttribute('position',new THREE.Float32BufferAttribute(archVertices,3));archGeometry.computeVertexNormals();
+  const arches=addMesh(archGeometry,shaftEnamel);arches.name='Cupola / tapered pressure arches';
+  for(const height of [-5.4,y+.22,y+2.30]) {
+    const radius=Math.sqrt(3.48**2-(height+3.35)**2);
+    hoop(radius-.023,height,.063,M.graphite);
+    hoop(radius-.081,height,.033,M.silver);
+  }
+  // A circumferential service ring is fastened to the actual pressure shell.
+  // Its covers, ducts and warm diffusers remain above the panoramic eye line.
+  const serviceY=y+2.31,serviceR=Math.sqrt(3.48**2-(serviceY+3.35)**2)-.12;
+  for(let i=0;i<48;i++) {
+    const angle=(i+.5)*Math.PI/24,yaw=facing(angle),p=point(angle,serviceR,serviceY);
+    box(...p,2*serviceR*Math.sin(Math.PI/48)+.012,.20,.21,M.enamel,yaw);
+    const trim=point(angle,serviceR-.118,serviceY-.045);
+    box(...trim,.34,.022,.02,M.graphite,yaw);
+  }
+  for(let i=0;i<16;i++) {
+    const angle=(i+.5)*Math.PI/8,yaw=facing(angle),origin={x:Math.cos(angle)*serviceR,z:cz+Math.sin(angle)*serviceR};
+    cupolaPart(origin,yaw,0,serviceY,.124,.49,.132,.029,i%2?M.padding:M.graphite);
+    for(const dx of [-.208,.208]) {
+      const p=kit.toWorld(origin,yaw,[dx,serviceY,.148]);kit.bolt(...p,yaw,M.silver,.017);
+    }
+    if(i%2===0)cupolaPart(origin,yaw,0,serviceY-.121,.087,.50,.022,.08,M.whiteLight);
+    else for(let j=0;j<6;j++)cupolaPart(origin,yaw,-.15+j*.06,serviceY,.145,.020,.08,.01,M.silver);
+  }
   const deck=addMesh(new THREE.CircleGeometry(2.76,64),glazing);deck.rotation.x=-Math.PI/2;deck.position.set(0,y,cz);
   ring(2.75,0,y-.02,cz,M.silver,Math.PI/2,.075);
   const centerDeck=addMesh(new THREE.CylinderGeometry(.9,.9,.12,40),M.graphite);centerDeck.position.set(0,y-.08,cz);
-  for(let i=0;i<10;i++) {
-    const a=i*Math.PI/5,dx=Math.cos(a),dz=Math.sin(a);
-    kit.pipe([dx*.85,y-.08,cz+dz*.85],[dx*2.75,y-.08,cz+dz*2.75],.042,M.silver);
-    kit.pipe([dx*2.71,y+.15,cz+dz*2.71],[dx*2.71,y+1.0,cz+dz*2.71],.025,M.silver);
-    for(let j=0;j<5;j++)kit.cuboid(dx*(2.2+j*.1),y+.016,cz+dz*(2.2+j*.1),.04,.025,.05,M.accent,a);
+  for(let i=0;i<8;i++) {
+    const a=i*Math.PI/4,dx=Math.cos(a),dz=Math.sin(a),yaw=facing(a),origin={x:dx*2.72,z:cz+dz*2.72};
+    kit.pipe([dx*.85,y-.08,cz+dz*.85],[dx*2.75,y-.08,cz+dz*2.75],.045,M.graphite);
+    kit.pipe([dx*2.75,y-.08,cz+dz*2.75],[dx*3.12,y-.08,cz+dz*3.12],.071,M.silver);
+    cupolaPart(origin,yaw,0,y+.17,0,1.10,.25,.15,M.enamel);
+    cupolaPart(origin,yaw,0,y+.18,.085,.89,.14,.020,M.padding);
+    for(const side of [-1,1])cupolaPart(origin,yaw,side*.42,y+.18,.103,.032,.15,.025,M.graphite);
+    cupolaPart(origin,yaw,0,y+.06,.085,.20,.018,.01,M.accent);
+    for(const side of [-1,1]){
+      const p=kit.toWorld(origin,yaw,[side*.50,y+.20,.086]);kit.bolt(...p,yaw,M.silver,.019);
+    }
   }
-  ring(2.71,0,y+1,cz,M.silver,Math.PI/2,.026);
+  hoop(2.75,y+.315,.042,M.silver);
   for(const x of [-.75,.75])box(x,-1.77,cz,.32,.04,.32,M.whiteLight);
+  // The ascent control is bolted to the ladder stringer, with a protected cable
+  // and a short angled support, rather than hanging in the room.
+  kit.pipe([.40,y+.20,cz-.50],[.65,y+.82,cz-.55],.032,M.silver);
+  kit.pipe([.40,y+1.35,cz-.50],[.65,y+1.26,cz-.55],.023,M.silver);
+  box(.65,y+1.05,cz-.60,.59,.47,.08,M.enamel);
+  kit.pipe([.40,y+.25,cz-.49],[.40,y+1.43,cz-.49],.014,M.graphite);
   const up=button('cupola-ascent','CLIMB TO FORUM',.65,y+1.05,cz-.55,0,'cupola',()=>{hatch.open=true;return 'Climbing to the Forum. Hatch secured behind you.';});up.action='ascend';up.range=2.2;
-  const scope=new THREE.Group();scope.position.set(1.72,y+.9,cz+.5);root.add(scope);
-  kit.pipe([1.72,y,cz+.5],[1.72,y+.9,cz+.5],.07,M.graphite);
-  const scopeBody=addMesh(new THREE.CylinderGeometry(.11,.15,.55,12),M.enamel,scope);scopeBody.rotation.x=.65;
-  const survey=button('cupola-survey','SURVEY PLANET',1.2,y+1.12,cz+1.8,Math.PI,'cupola',()=>{
-    scope.rotation.y+=Math.PI/3;return 'Survey recorded: Pelagia · ocean coverage 71% · atmosphere stable.';
-  });survey.state=()=>({heading:scope.rotation.y});
-  label('PELAGIA','NADIR OBSERVATORY / DECK −01',0,y+1.85,cz+2.4,Math.PI,1.5);
-  let surveyCount=0;const oldSurvey=survey.activate;survey.activate=()=>{surveyCount++;return oldSurvey();};
-  const cupolaColliders=[
-    {id:'cupola-scope-post',x:1.72,z:cz+.5,w:.32,d:.32},
-    {id:'cupola-survey-control',x:1.2,z:cz+1.8,w:.54,d:.22},
+  // A small asymmetric survey desk occupies one edge; the central glass deck
+  // and the (1,-20.8) observation waypoint remain unobstructed.
+  const desk={x:1.05,z:cz+2.00},deskYaw=Math.PI;
+  cupolaPart(desk,deskYaw,0,y+.50,0,.70,.87,.34,M.graphite);
+  cupolaPart(desk,deskYaw,0,y+.085,0,.86,.13,.41,M.enamel);
+  cupolaPart(desk,deskYaw,0,y+.96,0,1.02,.11,.46,M.enamel);
+  cupolaPart(desk,deskYaw,0,y+1.26,-.025,1.01,.55,.10,M.graphite);
+  cupolaPart(desk,deskYaw,0,y+1.26,.034,.95,.48,.026,M.enamel);
+  cupolaPart(desk,deskYaw,0,y+.62,.185,.59,.39,.025,M.padding);
+  for(const side of [-1,1]) {
+    cupolaPart(desk,deskYaw,side*.29,y+.62,.208,.036,.40,.025,M.graphite);
+    cupolaPart(desk,deskYaw,side*.40,y+1.034,.125,.072,.022,.058,M.silver);
+  }
+  for(let row=0;row<2;row++)for(let column=0;column<6;column++)cupolaPart(desk,deskYaw,-.27+column*.108,y+1.031,.09+row*.10,.076,.016,.068,column===5?instrumentGlow:M.graphite);
+  for(const side of [-1,1])kit.pipe([desk.x+side*.37,y+.1,desk.z],[desk.x+side*.37,y+.87,desk.z],.026,M.silver);
+  cupolaColliders.push({id:'cupola-survey-console',x:desk.x,z:desk.z,w:1.04,d:.48});
+  const scope=new THREE.Group();scope.position.set(1.77,y+1.17,cz+1.31);root.add(scope);
+  kit.pipe([desk.x+.31,y+.82,desk.z-.03],[1.77,y+.82,cz+1.31],.045,M.silver);
+  kit.pipe([1.77,y+.82,cz+1.31],[1.77,y+1.17,cz+1.31],.040,M.graphite);
+  const scopeBody=addMesh(new THREE.CylinderGeometry(.13,.16,.48,12),M.enamel,scope);scopeBody.rotation.x=1.11;
+  const scopeLens=addMesh(new THREE.CylinderGeometry(.112,.112,.025,16),instrumentGlow,scope);scopeLens.rotation.x=1.11;scopeLens.position.set(0,.108,.218);
+  kit.cuboid(0,0,-.17,.18,.12,.19,M.graphite,0,scope);
+  cupolaColliders.push({id:'cupola-scope-arm',x:1.73,z:cz+1.37,w:.27,d:.35});
+  const pointers=[];
+  for(let i=0;i<2;i++) {
+    const origin={x:desk.x-.58,z:desk.z+.015},height=y+1.08+i*.25;
+    cupolaPart(origin,Math.PI,0,height,0,.22,.215,.085,M.enamel);
+    kit.pipe([origin.x,height,origin.z-.07],[origin.x,height,origin.z-.084],.084,M.graphite,16);
+    const pointer=new THREE.Group();pointer.position.set(origin.x,height,origin.z-.10);root.add(pointer);
+    kit.cuboid(0,.029,0,.012,.07,.013,i?amber:instrumentGlow,0,pointer);pointers.push(pointer);
+  }
+  // Peripheral observer perches have real brackets, foot restraints and harness
+  // webbing. They leave the ladder and the large forward window bays open.
+  for(const [index,zOffset] of [-.90,.90].entries()) {
+    const origin={x:-2.06,z:cz+zOffset},yaw=Math.PI/2;
+    cupolaPart(origin,yaw,0,y+.075,0,.42,.10,.43,M.graphite);
+    cupolaPart(origin,yaw,0,y+.32,0,.12,.47,.15,M.silver);
+    cupolaPart(origin,yaw,0,y+.54,.02,.48,.095,.42,M.enamel);
+    cupolaPart(origin,yaw,0,y+.598,.04,.43,.057,.36,upholstery);
+    cupolaPart(origin,yaw,0,y+.83,-.155,.48,.51,.09,M.enamel);
+    cupolaPart(origin,yaw,0,y+.835,-.099,.40,.44,.045,upholstery);
+    for(const side of [-1,1]) {
+      cupolaPart(origin,yaw,side*.09,y+.84,-.065,.035,.39,.021,M.graphite,side*.18);
+      cupolaPart(origin,yaw,side*.09,y+.624,.13,.13,.023,.031,M.graphite);
+      const a=kit.toWorld(origin,yaw,[side*.17,y+.25,.15]),b=kit.toWorld(origin,yaw,[side*.17,y+.20,.38]);kit.pipe(a,b,.023,M.silver);
+    }
+    cupolaPart(origin,yaw,0,y+.64,.14,.067,.027,.043,M.silver);
+    cupolaPart(origin,yaw,0,y+.21,.34,.40,.045,.10,M.graphite);
+    cupolaColliders.push({id:`cupola-perch-${index+1}`,x:origin.x+.075,z:origin.z,w:.59,d:.52});
+  }
+  const surveyModes=[
+    {name:'MINERAL SPECTRUM',color:'#cfff04',result:'Pelagia spectral survey: layered mineral deposits and glassy impact basins.',values:[.15,.28,.76,.31,.44,.92,.39,.21,.63,.41,.18,.32]},
+    {name:'THERMAL FIELD',color:'#edb176',result:'Pelagia thermal survey: warm fracture networks crossing a cooler crystalline crust.',values:[.22,.27,.31,.58,.89,.75,.41,.36,.62,.81,.47,.30]},
+    {name:'ATMOSPHERIC HAZE',color:'#a7b8e8',result:'Pelagia limb survey: suspended mineral haze and broad upper-atmosphere bands.',values:[.81,.74,.66,.58,.54,.41,.37,.31,.25,.23,.19,.16]},
   ];
+  let surveyMode=0,surveyCount=0,surveyRevision=0;
+  function paintSurvey(g,w,h) {
+    const state=surveyModes[surveyMode];g.fillStyle='#081a20';g.fillRect(0,0,w,h);
+    g.fillStyle='#90aaa8';g.font='500 22px Space, Arial';g.fillText('PELAGIA / NADIR OBSERVATORY',28,36);
+    g.fillStyle=state.color;g.font='500 33px Space, Arial';g.fillText(state.name,28,84,w-56);
+    g.strokeStyle='#2a4850';g.lineWidth=1;
+    for(let row=0;row<4;row++){g.beginPath();g.moveTo(28,121+row*44);g.lineTo(w-28,121+row*44);g.stroke();}
+    state.values.forEach((value,i)=>{g.fillStyle=i%3?state.color:'#e4e8d5';g.fillRect(32+i*57,287-value*167,34,value*167);});
+    g.fillStyle='#bbd0c5';g.font='20px Space, Arial';g.fillText(`LOCAL RECORD ${String(surveyCount).padStart(3,'0')}  /  INSTRUMENT ${surveyMode+1} OF 3`,28,327);
+    g.fillStyle='#223c3e';g.fillRect(25,346,w-50,57);g.fillStyle=state.color;g.font='500 27px Space, Arial';g.fillText('E / CLICK  →  NEXT SURVEY CHANNEL',40,384,w-80);
+  }
+  const surveyMap=texture(768,432,paintSurvey);surveyMap.userData.emissiveDisplay=true;
+  const surveyScreen=textPlane(surveyMap,.89,.50,desk.x,y+1.275,desk.z-.065,Math.PI);
+  surveyScreen.name='Cupola / mineral survey console';
+  const survey={id:'cupola-survey',label:'CYCLE PLANET SURVEY',x:surveyScreen.position.x,y:surveyScreen.position.y,z:surveyScreen.position.z,zone:'cupola',range:1.85,mesh:surveyScreen,
+    activate:()=>{
+      surveyMode=(surveyMode+1)%surveyModes.length;surveyCount++;surveyRevision++;
+      paintSurvey(surveyMap.image.getContext('2d'),768,432);surveyMap.needsUpdate=true;
+      instrumentGlow.color.set(surveyModes[surveyMode].color);instrumentGlow.emissive.copy(instrumentGlow.color);
+      return surveyModes[surveyMode].result;
+    },
+    state:()=>({mode:surveyModes[surveyMode].name,channel:surveyMode+1,count:surveyCount,canvasState:surveyMode,canvasRevision:surveyRevision,heading:scope.rotation.y}),
+  };devices.push(survey);
+  function updateSurvey(dt) {
+    const blend=1-Math.exp(-Math.max(0,dt)*4),heading=[.24,.81,-.36][surveyMode];
+    scope.rotation.y+=(heading-scope.rotation.y)*blend;
+    pointers.forEach((pointer,i)=>{const target=[[-.7,.8],[.5,-.4],[-1.1,-.2]][surveyMode][i];pointer.rotation.z+=(target-pointer.rotation.z)*blend;});
+  }
+  const badge=label('PELAGIA','MINERAL WORLD / SPECTRAL SURVEY',0,serviceY,cz+serviceR-.15,Math.PI,1.55);
+  badge.name='Cupola / mounted observation fascia';
   paintPressure();
-  return {devices,colliders,cupolaColliders,doors:airDoors,stats:{decks:2,airlock:true,exteriorWalkwayMetres:43.7,solarWings:4,cupolaGlazingRadius:3.48},
+  return {devices,colliders,cupolaColliders,doors:airDoors,stats:{decks:2,airlock:true,exteriorWalkwayMetres:43.7,solarWings:4,cupolaGlazingRadius:3.48,cupola:cupolaStats},
     hatch,airlock,
     getState:()=>({airlock:{...airlock},hatch:{...hatch},surveys:surveyCount,doors:airDoors.map(d=>({id:d.id,x:d.x,z:d.z,openness:d.openness}))}),
     update(time,dt,player) {
+      updateSurvey(dt);
       hatch.amount=THREE.MathUtils.damp(hatch.amount,hatch.open?1:0,5,dt);lidPivot.rotation.x=-hatch.amount*Math.PI*.52;
       if(airlock.mode.startsWith('cycling')) {
         // Do not close a hatch on a player crossing its sill.

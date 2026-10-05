@@ -32,9 +32,61 @@ export const LINKS = [
 // Dedicated EVA side port; this is not an eighth Sentient department.
 MODULES.find(m => m.id === 'front-door').ports.push('E');
 
-export function modulePolygon(m) {
+// Each pressure body has a different, deliberately asymmetric expansion. Values
+// describe distance along the original face and metres outward. Cardinal hatch
+// faces and the department terminal stay fixed, so old passageways still align.
+export const HULL_PROFILES = {
+  'front-door': { name: 'Offset docking nose', face: 4, main: 2, path: [[-.12,.75],[-.06,1.75],[.94,2.1],[1.13,.85]] },
+  archive: { name: 'Stepped data vault', face: 2, main: 2, path: [[0,.7],[.18,1.5],[.72,1.5],[.72,.45],[1,.45]] },
+  floor: { name: 'L-shaped fabrication bay', face: 4, main: 2, path: [[.36,0],[.36,2.15],[.92,2.15],[1,1.55]] },
+  lab: { name: 'Faceted specimen lobe', face: 6, main: 3, path: [[-.14,.7],[-.12,1.5],[.1,1.95],[.88,1.75],[1.05,.9]] },
+  forum: { name: 'Diagonal strategy annex', face: 3, main: 2, path: [[-.12,1.35],[.25,2.1],[1.05,1.9],[1.18,.75]] },
+  commons: { name: 'Crescent habitat', face: 4, main: 2, path: [[.04,.85],[.22,1.7],[.75,2.4],[.93,1.9],[1,1]] },
+  bridge: { name: 'Offset panoramic prow', face: 0, main: 2, path: [[-.12,1.05],[.08,2.45],[.7,3.3],[1.1,2.55],[1.15,.85]] },
+};
+
+function corePolygon(m) {
   const x = m.hx, z = m.hz, cx = x - m.cut, cz = z - m.cut;
   return [[-cx,-z],[cx,-z],[x,-cz],[x,cz],[cx,z],[-cx,z],[-x,cz],[-x,-cz]].map(([x,z]) => ({ x: x + m.x, z: z + m.z }));
+}
+
+// Module geometry is immutable after construction; reuse its boundary during movement.
+const edgeCache = new WeakMap(), polygonCache = new WeakMap();
+
+// Semantic faces remain N, NE, E, SE, S, SW, W, NW even when the boundary
+// gains extra vertices. Wall-mounted systems use the main face of each bay.
+export function moduleEdges(m) {
+  if (edgeCache.has(m)) return edgeCache.get(m);
+  const core = corePolygon(m), profile = HULL_PROFILES[m.id], edges = [];
+  for (let face = 0; face < 8; face++) {
+    const a = core[face], b = core[(face + 1) % 8];
+    const dx = b.x-a.x, dz = b.z-a.z, length = Math.hypot(dx,dz);
+    const expanded = profile?.face === face;
+    const path = expanded ? [a, ...profile.path.map(([t,d]) => ({x:a.x+dx*t+dz/length*d,z:a.z+dz*t-dx/length*d})), b] : [a,b];
+    for (let segment = 0; segment < path.length-1; segment++) {
+      const primary = !expanded || segment === profile.main;
+      edges.push({a:path[segment],b:path[segment+1],face,index:primary?face:8+face,primary,expanded,
+        port:!expanded?({0:'N',2:'E',4:'S',6:'W'})[face]:undefined,
+        panoramic:expanded && m.id==='bridge' });
+    }
+  }
+  edgeCache.set(m,edges);
+  return edges;
+}
+
+export function moduleFacet(m, index) {
+  return moduleEdges(m).find(edge => edge.index === index && edge.primary);
+}
+
+export function facetInset(m, edge) {
+  const dx=edge.b.x-edge.a.x, dz=edge.b.z-edge.a.z, length=Math.hypot(dx,dz);
+  const radius=((m.x-edge.a.x)*-dz+(m.z-edge.a.z)*dx)/length;
+  return radius*.17+.16;
+}
+
+export function modulePolygon(m) {
+  if (!polygonCache.has(m)) polygonCache.set(m,moduleEdges(m).map(edge => edge.a));
+  return polygonCache.get(m);
 }
 
 export function insidePolygon(x, z, points) {

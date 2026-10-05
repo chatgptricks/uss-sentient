@@ -29,7 +29,8 @@ function build() {
   const ctx = {
     root, MODULES, materials, mat, endSection() {}, addMesh,
     box(x, y, z, w, h, d, material, yaw = 0) { boxes.push({ x, y, z, w, h, d, material, yaw }); },
-    kit: { pipe(a, b, radius, material) { pipes.push({ a, b, radius, material }); }, cuboid() {}, bolt() {} },
+    kit: { pipe(a, b, radius, material) { pipes.push({ a, b, radius, material }); }, cuboid() {}, bolt() {},
+      toWorld(origin,yaw,[x,y,z]) { return [origin.x+x*Math.cos(yaw)+z*Math.sin(yaw),y,origin.z-x*Math.sin(yaw)+z*Math.cos(yaw)]; } },
     texture(w, h, paint) { paint(painting, w, h); return new THREE.CanvasTexture({ width: w, height: h, getContext: () => painting }); },
     textPlane(map, w, h, x, y, z, yaw, parent = root) {
       const mesh = addMesh(new THREE.PlaneGeometry(w, h), mat({ map }), parent);
@@ -139,11 +140,40 @@ test('station-side call recovers an abandoned outbound cycle without a pressure 
 
 test('cupola equipment has local collision bounds while ladder access stays clear', () => {
   const { expansion } = build();
-  assert.equal(expansion.cupolaColliders.length,2);
+  assert.equal(expansion.cupolaColliders.length,4);
   for(const c of expansion.cupolaColliders)assert.equal(canWalk(c.x,c.z,CUPOLA_AREAS,expansion.cupolaColliders),false);
   walk({x:0,z:-20.6},CUPOLA.hatch,CUPOLA_AREAS,expansion.cupolaColliders);
   walk({x:-1.6,z:-22},CUPOLA.hatch,CUPOLA_AREAS,expansion.cupolaColliders);
+  walk(CUPOLA.hatch,{x:1,z:-20.8},CUPOLA_AREAS,expansion.cupolaColliders);
+  for(const fixture of expansion.cupolaColliders)for(const dx of [-1,1])for(const dz of [-1,1]) {
+    assert.ok(Math.hypot(fixture.x+dx*fixture.w/2,fixture.z+dz*fixture.d/2-CUPOLA.z)<2.76,`${fixture.id} has a floor beneath its complete footprint`);
+  }
   assert.ok(expansion.colliders.every(c=>!c.id.startsWith('cupola-')),'Lower-deck fixtures never block the Forum above');
+});
+
+test('the fitted observatory cycles visible spectral instruments without uploading screens every frame', () => {
+  const { expansion, root } = build(), survey=expansion.devices.find(d=>d.id==='cupola-survey');
+  assert.equal(expansion.stats.cupola.arches,8);assert.equal(expansion.stats.cupola.perches,2);
+  assert.ok(expansion.stats.cupola.windowFasteners>=64);
+  const arches=root.getObjectByName('Cupola / tapered pressure arches');
+  assert.ok(arches?.geometry.attributes.position.count>1000,'Substantial arches are one merged geometry');
+  const screen=survey.mesh.material.map, initial=survey.state(), initialVersion=screen.version;
+  for(let i=0;i<30;i++)expansion.update(i*.05,.05,{x:0,z:CUPOLA.z,layer:'cupola'});
+  assert.equal(screen.version,initialVersion);
+  const modes=new Set([initial.mode]);
+  for(let step=0;step<3;step++) {
+    const before=survey.state(),message=survey.activate();
+    assert.ok(!/ocean|71%/i.test(message));assert.match(message,/Pelagia/);
+    const state=survey.state();modes.add(state.mode);
+    assert.equal(state.count,before.count+1);assert.equal(state.canvasRevision,before.canvasRevision+1);
+    assert.notEqual(state.canvasState,before.canvasState);
+    const version=screen.version;
+    for(let i=0;i<30;i++)expansion.update(i*.05,.05,{x:0,z:CUPOLA.z,layer:'cupola'});
+    assert.equal(screen.version,version,'Instrument motion never uploads a new screen texture');
+    assert.notEqual(survey.state().heading,before.heading,'The actual survey instrument changes orientation');
+  }
+  assert.equal(modes.size,3);
+  assert.equal(survey.state().mode,initial.mode);
 });
 
 test('the cupola has a transparent downward view and an unobstructed ladder aperture', () => {
