@@ -243,6 +243,15 @@ export function createStationAudio() {
     if (key === 'latch') return effect({ point: place, frequency: 170, endFrequency: 57, tone: .045, noise: .015, duration: .10, cutoff: 900 });
     if (key === 'airlock') return effect({ point: place, frequency: 78, endFrequency: 49, tone: .026, noise: .05, duration: 1.25, attack: .16, cutoff: 760 });
     if (key === 'machinery') return effect({ point: place, frequency: 98, endFrequency: 73, tone: .012, noise: .012, duration: .85, attack: .20, cutoff: 690 });
+    // Intercom: a short squelch and tone. Drill klaxon: a two-tone sweep.
+    if (key === 'radio') {
+      effect({ point: place, frequency: hz(88), endFrequency: hz(86), tone: .02, noise: .02, duration: .12, attack: .005, cutoff: 3200 });
+      return effect({ point: place, when: context.currentTime + .14, frequency: hz(93), tone: .016, duration: .09, attack: .005, cutoff: 3600 });
+    }
+    if (key === 'klaxon') {
+      effect({ point: place, frequency: hz(76), endFrequency: hz(74), tone: .05, overtone: .3, duration: .42, attack: .02, cutoff: 2600 });
+      return effect({ point: place, when: context.currentTime + .45, frequency: hz(71), endFrequency: hz(69), tone: .05, overtone: .3, duration: .42, attack: .02, cutoff: 2600 });
+    }
     if (key === 'error' || key === 'denied') return effect({ point: place, frequency: hz(62), endFrequency: hz(60), tone: .04, duration: .28, cutoff: 1300 });
     const notes = /scan|discover|success|complete/.test(key) ? [74, 81, 86] : /console|terminal/.test(key) ? [74, 81] : [81];
     let played = false;

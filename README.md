@@ -43,7 +43,7 @@ Seven operable department panels control a suit test, archive core, fabrication 
 
 The map includes all three destinations and shows the lower deck under Forum. A translation-independent sky contains 15,600 distant stars. Pelagia has violet mineral plates, copper terraces, luminous canyon faults, mineral haze, a solar terminator and a tilted dusty ring. Its mineral albedo and fissure glow are baked once; day, night, the terminator, a glancing sheen and ring shadows are lit per pixel, so the planet turns beneath the station (about one revolution every 19 minutes). Drifting sulfur and pearl cloud banks turn slightly faster, a gold-to-violet atmospheric limb and halo follow the sunlit side, the fissures shimmer brighter on the night side, and the planet's shadow falls across its ring. The planet adds no dynamic lamps.
 
-The station is in orbit. Its orbit normal points close to the lime star, so the star holds its place in the Bridge prow while the rest of the sky wheels slowly around it (one turn about every 12 minutes) and Pelagia's surface slides under the cupola. The star boils with convection cells and granulation, carries slowly drifting sunspots and faculae, pulses gently, and wears an animated corona with rotating streamers, limb prominences and a flare roughly every 47 seconds. A Sentient tender with blinking navigation lights and strobe coasts past the prow every ~2.75 minutes. Motion respects the reduced-motion preference. These are illustrative, compressed distances, not orbital dynamics. New extension lamps reuse the same six-light pool; Performance still allocates no shadow/AO/bloom buffers.
+The station is in orbit. Its orbit normal points close to the lime star, so the star holds its place in the Bridge prow while the rest of the sky wheels slowly around it (one turn about every 12 minutes) and Pelagia's surface slides under the cupola. The star boils with convection cells and granulation, carries slowly drifting sunspots and faculae, pulses gently, and wears an animated corona with rotating streamers, limb prominences and a flare roughly every 47 seconds. Motion respects the reduced-motion preference. These are illustrative, compressed distances, not orbital dynamics. New extension lamps reuse the same six-light pool; Performance still allocates no shadow/AO/bloom buffers.
 
 `npm run test:expansion` verifies the real two-way airlock journey, cupola descent/ascent, all seven clickable panels, map destinations, room audio and rendering. `npm run test:audio` runs standalone real Web Audio tests (gesture unlocking, audible output, spatial cues, profile changes, fixed allocations, muting and disposal). Set `AUDIO_GAME_URL=http://127.0.0.1:5173` to include mute preference persistence in the game UI.
 
@@ -57,6 +57,18 @@ Every department has one identity used everywhere: a colour, a symbol and a shor
 - **Map and directory:** rooms, numbers and the route are drawn in the same colours.
 
 The shared identity lives in `src/room-identity.js`, door portals and gate markers in `src/wayfinding.js`, and the guide light in `src/guide-line.js`.
+
+## Station life
+
+- **Traffic and docking:** Sentient tender 02 crosses the Bridge prow, swings round the station and docks at the Front Door's offset nose every four minutes: inbound, final approach with RCS puffs, hard dock, a hold, undocking and departure. The Front Door's proximity screen is a live docking camera (low-resolution, rendered only while you are in the Front Door) with range and closing-rate readouts.
+- **Ship clock and night cycle:** a station day passes every 12 minutes from 07:00. From 22:00 to 06:00 the cabin practicals and ceiling strips dim and warm; screens stay lit. The orbit panel shows station time.
+- **Intercom:** the Bridge, Floor, Lab, Commons, Archive and Forum talk over the intercom with a radio chirp and on-screen captions, spoken with the browser's built-in speech when sound is on. Docking, drills, the night cycle and EVA work are all announced.
+- **Emergency drills:** about every ten minutes (or from Settings) a simulated pressure leak turns the cabin red, sounds a klaxon and routes the guide light to a safe haven. Reach it to stop the timer; your best time goes in the expedition log.
+- **A1 suit bay:** three NASA EMU suits (smaller sizes) hang on the airlock rack, packs to the wall, leaving the walk line clear.
+- **Spacewalk repair:** radiator loop 3 has a failed ORU just outside the EVA lookout rail. Release the failed panel, then seat the spare from its cradle; the fault beacon turns green and the Bridge confirms.
+- **Cupola telescope:** use the survey scope to zoom ×7.5 onto Pelagia. Six named sites (Copper Terraces, Luminous Rift, Glass Crater Field, Sulfur Storm, Obsidian Plateau and Pearl Haze Basin) drift under the cupola as the planet turns; centre one and press E to tag it. Fine surface detail appears only under magnification. Tagged sites are listed in the expedition log (J).
+
+Automatic drills and ambient chatter are off under browser automation so tests stay deterministic. `npm run test:life` checks the docking cycle and feed, day/night cabin, a timed drill, the EVA repair and a telescope tag.
 
 ## Run locally
 

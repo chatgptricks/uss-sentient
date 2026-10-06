@@ -116,7 +116,8 @@ export function addScreenPanels(ctx) {
     const point = kit.toWorld(face.origin,face.ry,[x,y,.273]);
     const map = displayMap(plot,module.id,index);
     map.userData.emissiveDisplay = true;
-    textPlane(map,w,h,...point,face.ry);
+    const screen = textPlane(map,w,h,...point,face.ry);
+    screen.name = `${module.id} / ${plot} display ${index}`;
     for(const side of [-1,1]) {
       part(face,x+side*(w/2+.044),y,.267,.027,h*.58,.03,M.enamel);
       bolt(face,x+side*(w/2+.026),y-h/2-.026,.271);

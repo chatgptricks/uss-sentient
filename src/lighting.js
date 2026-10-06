@@ -121,7 +121,20 @@ export function createStationLighting(root) {
     // Never turn an unoccluded directional lamp on inside a sealed hull.
     sun.intensity = quality==='performance' ? 0 : 2.5;
     sun.castShadow = quality!=='performance';
-    bounce.intensity = quality==='performance' ? .26 : .24;
+    bounce.intensity = quality==='performance' ? .26 : .24; bounceBase = null;
+  }
+  // Cabin state from the ship clock and drills: dim warm nights, red alerts.
+  const cabin = { brightness: 1, warmth: 0, alert: 0 }, warm = new THREE.Color(0xffb27a), red = new THREE.Color(0xff2a1a);
+  let bounceBase = null;
+  function setCabin(next) { Object.assign(cabin, next); }
+  function applyCabin() {
+    bounceBase ??= bounce.intensity;
+    for (const light of practicals) {
+      const source = assignments.get(light); if (!source) continue;
+      light.intensity = source.intensity * cabin.brightness * (1 + cabin.alert * .25);
+      light.color.copy(source.color).lerp(warm, cabin.warmth).lerp(red, cabin.alert * .85);
+    }
+    bounce.intensity = bounceBase * (.55 + .45 * cabin.brightness);
   }
   function update(player, dt, movingHatch) {
     time += dt;
@@ -155,6 +168,7 @@ export function createStationLighting(root) {
       }
       active=practicals.slice(0,budget);
     }
+    applyCabin();
     if (movingHatch) for (const light of [...active,sun]) if (light.castShadow) light.shadow.needsUpdate=true;
     // The laboratory's slow sample animation also changes its projected shadow.
     if (time-lastLabRefresh>.12 && active.some(light=>light.name.startsWith('lab /'))) {
@@ -170,5 +184,5 @@ export function createStationLighting(root) {
       shadowMaps:shadowLights.filter(light=>light.shadow.map).length,
       activeSources:shadowLights.map(light=>light.name),starIntensity:sun.intensity,shadowBudget:quality==='high'?4:quality==='performance'?0:3};
   }
-  return {setQuality,update,stats,dispose:()=>[...practicals,sun].forEach(releaseMap)};
+  return {setQuality,update,stats,setCabin,cabin,dispose:()=>[...practicals,sun].forEach(releaseMap)};
 }

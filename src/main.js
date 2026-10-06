@@ -14,6 +14,7 @@ import { CUPOLA, EXTENSION_AREAS, CUPOLA_AREAS, EXTENSION_DESTINATIONS, expansio
 import { AMENITIES, findAmenityRoute, interactionBlocked, clearSegment } from './amenities.js';
 import { identityOf } from './room-identity.js';
 import { createGuideLine } from './guide-line.js';
+import { createStationLife, PELAGIA_FEATURES } from './station-life.js';
 import './style.css';
 
 const icons = {
@@ -73,11 +74,14 @@ $('app').innerHTML = `
   <div id="touch-controls" class="touch-controls"><div id="joystick" class="joystick" aria-label="Movement joystick"><span id="joystick-knob"></span></div><button id="touch-interact" class="touch-interact" aria-label="Use nearby control or terminal">USE</button></div>
   <aside id="photo-panel" class="photo-panel" hidden aria-label="Ray-traced still view"><div><div class="eyebrow">RAY-TRACED STILL VIEW</div><p id="photo-status" role="status">Preparing light paths</p><small>Camera paused · The image refines as light samples accumulate.</small></div><button id="photo-exit" class="primary">BACK TO EXPLORATION <kbd>ESC</kbd></button></aside>
   <aside id="environment-status" class="environment-status"><span id="environment-label">CABIN ATMOSPHERE</span><b id="environment-value">101.3 kPa · SEALED</b><small id="environment-hint">E / CLICK · OPERATE CONTROLS</small></aside>
+  <div id="intercom" class="intercom" hidden role="status" aria-live="polite"><span class="intercom-dot"></span><small id="intercom-speaker">BRIDGE</small><p id="intercom-text"></p></div>
+  <div id="alert" class="alert-banner" hidden role="alert"><b id="alert-title">DRILL</b><span id="alert-detail"></span><em id="alert-time">0 s</em></div>
+  <div id="telescope" class="telescope" hidden><div class="scope-vignette"></div><div class="scope-reticle"><i></i></div><div id="telescope-markers"></div><div class="scope-readout"><small>CUPOLA TELESCOPE · ×7.5</small><b id="telescope-status">CENTRE A SITE</b><span id="telescope-count">0 / 6</span><em>E TAG A NEW SITE · OTHERWISE E RETURNS</em></div></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="modal-root" hidden></div>
   <div id="loading" class="loading"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
 `;
 
-let renderer, scene, camera, composer, bloom, ambientOcclusion, world, guide;
+let renderer, scene, camera, composer, bloom, ambientOcclusion, world, guide, life;
 let photoState = 'idle', photoController, photoAbort, photoError = null, photoSession = 0;
 await Promise.all([document.fonts.load('400 16px Space'), document.fonts.load('500 16px Space')]).catch(() => {});
 try {
@@ -100,6 +104,10 @@ try {
   camera.rotation.order = 'YXZ';
   world = await createWorld(scene, rooms);
   guide = createGuideLine(scene);
+  life = createStationLife({ world, audio, camera, rooms, storage, notify,
+    setTarget: id => { target = destinations.find(r => r.id === id) || rooms.find(r => r.id === id) || target; },
+    getTarget: () => target.id,
+    getPlayer: () => ({ ...position, layer, zone: currentZone() }) });
   applyQuality();
   requestAnimationFrame(() => { $('loading').hidden = true; });
 } catch (error) {
@@ -193,6 +201,7 @@ function enter() {
 }
 
 function pause() {
+  life?.exitScope();
   setActive(false);
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -238,6 +247,7 @@ function openTerminal(room, isNew = false) {
 function interact() {
   if (!active) return;
   if (transition) return;
+  if (life?.scope.on) { notify(life.tag()); return; }
   const device = pickDevice();
   if (device) operate(device);
   else if (nearRoom) scan(nearRoom);
@@ -267,7 +277,7 @@ function openMap() {
 
 function openJournal() {
   openModal('journal', 'The expedition log.', 'YOUR DISCOVERIES / SAVED ON THIS DEVICE',
-    `<p class="modal-intro">${visited.size ? 'Revisit the people, systems and ideas behind every signal you have connected.' : 'Your story starts at the Front Door. Walk to its glowing terminal and press E to make your first discovery.'}</p><div class="room-list">${rooms.map(r => `<button class="room-row" data-log="${r.id}" ${visited.has(r.id) ? '' : 'disabled'}><span class="num">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${visited.has(r.id) ? `${esc(r.signal)} signal connected · Open entry` : 'Undiscovered · Find this department terminal'}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '—'}</span></button>`).join('')}</div>`);
+    `<p class="modal-intro">${visited.size ? 'Revisit the people, systems and ideas behind every signal you have connected.' : 'Your story starts at the Front Door. Walk to its glowing terminal and press E to make your first discovery.'}</p><div class="room-list">${rooms.map(r => `<button class="room-row" data-log="${r.id}" ${visited.has(r.id) ? '' : 'disabled'}><span class="num">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${visited.has(r.id) ? `${esc(r.signal)} signal connected · Open entry` : 'Undiscovered · Find this department terminal'}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '—'}</span></button>`).join('')}</div><div class="eyebrow" style="margin-top:26px">PELAGIA SURVEY · ${life?.survey.size || 0} / ${PELAGIA_FEATURES.length}</div><div class="survey-list">${PELAGIA_FEATURES.map(f => `<div class="survey-row ${life?.survey.has(f.id) ? 'tagged' : ''}"><b>${life?.survey.has(f.id) ? f.name : 'Unlogged site'}</b><span>${life?.survey.has(f.id) ? f.note : 'Use the cupola telescope to find and tag it as Pelagia turns.'}</span></div>`).join('')}</div>${life?.drill.completed ? `<p class="modal-intro" style="margin-top:18px">Emergency drills completed: ${life.drill.completed} · best time ${life.drill.best} s</p>` : ''}`);
   document.querySelectorAll('[data-log]').forEach(button => { button.onclick = () => openTerminal(rooms.find(r => r.id === button.dataset.log)); });
 }
 
@@ -310,8 +320,9 @@ async function startPhoto() {
 
 function openSettings() {
   openModal('settings', 'Make yourself at home.', 'EXPEDITION SETTINGS',
-    `<div class="settings-row"><div>Graphics quality<small>Performance is the default: direct rendering with no shadow maps, bloom or contact shading.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>Spatial footsteps, pressure doors, working machinery, and an evolving procedural score for each room.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="settings-row"><div>Ray-traced still view<small>Pause here to render soft shadows, reflections and bounced light. Refines over time.</small></div><button id="photo-start" class="icon-button">RENDER VIEW <kbd>R</kbd></button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Operate control / hatch</span><b>E / Click</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap USE near a terminal or control. This fictional station is based on Sentient's documented seven functional zones.</p>`);
+    `<div class="settings-row"><div>Graphics quality<small>Performance is the default: direct rendering with no shadow maps, bloom or contact shading.</small></div><select id="quality" aria-label="Graphics quality"><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="high">High</option></select></div><div class="settings-row"><div>Look sensitivity<small>Mouse and touch camera speed.</small></div><input id="sensitivity" type="range" min="0.35" max="2" step="0.05" value="${sensitivity}" aria-label="Look sensitivity"/></div><div class="settings-row"><div>Ambient audio<small>Spatial footsteps, pressure doors, working machinery, and an evolving procedural score for each room.</small></div><button id="settings-sound" class="icon-button">${muted ? 'OFF' : 'ON'}</button></div><div class="settings-row"><div>Ray-traced still view<small>Pause here to render soft shadows, reflections and bounced light. Refines over time.</small></div><button id="photo-start" class="icon-button">RENDER VIEW <kbd>R</kbd></button></div><div class="settings-row"><div>Emergency drill<small>Red alert and klaxon: reach the safe haven before the clock runs out. Drills also run on their own about every ten minutes.</small></div><button id="drill-start" class="icon-button">RUN DRILL</button></div><div class="eyebrow" style="margin-top:27px">FLIGHT MANUAL</div><div class="help-list"><div><span>Move</span><b>W A S D / Arrows</b></div><div><span>Look around</span><b>Mouse / Drag</b></div><div><span>Sprint</span><b>Shift</b></div><div><span>Operate control / hatch</span><b>E / Click</b></div><div><span>Deck map / Log</span><b>M / J</b></div><div><span>Pause / Close</span><b>Esc</b></div></div><p class="modal-intro" style="font-size:11px;margin:24px 0 0">On touch screens, use the left joystick to move, drag the scene to look, and tap USE near a terminal or control. This fictional station is based on Sentient's documented seven functional zones.</p>`);
   $('photo-start').onclick = startPhoto;
+  $('drill-start').onclick = () => { enter(); if (!life.startDrill(elapsed)) notify('Drills run inside the pressurised station. Return from EVA or the cupola first.'); };
   $('quality').value = quality;
   $('quality').onchange = event => { quality = event.target.value; applyQuality(); };
   $('sensitivity').oninput = event => { sensitivity = Number(event.target.value); };
@@ -359,6 +370,7 @@ function operate(device) {
   if (!device || transition) return;
   audio.play(device.sound || (device.id.startsWith('airlock')?'airlock':device.action?'door-open':'console'),device);
   notify(device.activate());
+  if (device.mode === 'telescope') life.enterScope();
   if (device.action) {
     const descending=device.action==='descend';
     transition={descending,time:0,duration:3.6,from:{...position,y:eyeHeight},
@@ -481,6 +493,7 @@ function renderMap(canvas, large = false) {
 }
 
 function updatePlayer(dt) {
+  if (life?.scope.on) { movedDistance = 0; return; }
   const inputX = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + moveTouch.x;
   const inputZ = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) + moveTouch.y;
   const length = Math.max(1, Math.hypot(inputX, inputZ));
@@ -510,7 +523,7 @@ function updateHUD() {
   $('heading').textContent = `${String(degrees).padStart(3, '0')}° ${cardinal}`;
   nearRoom = layer==='station' && zone==='station' ? rooms.find(r => Math.hypot(position.x - r.terminal.x, position.z - r.terminal.z) < 1.5) || null : null;
   focusedDevice=pickDevice();
-  $('interact').hidden = !active || !!transition || (!nearRoom&&!focusedDevice);
+  $('interact').hidden = !active || !!transition || !!life?.scope.on || (!nearRoom&&!focusedDevice);
   $('crosshair').classList.toggle('near', !!nearRoom||!!focusedDevice);
   if (nearRoom) $('interact-label').textContent = `${visited.has(nearRoom.id) ? 'REVISIT' : 'SCAN'} ${nearRoom.shortName.toUpperCase()}`;
   if(focusedDevice) $('interact-label').textContent=focusedDevice.label.toUpperCase();
@@ -590,10 +603,11 @@ document.addEventListener('pointerlockerror', () => { if (active) notify('Mouse 
 window.addEventListener('blur', () => { keys.clear(); if (active) pause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { keys.clear(); if (active) pause(); } });
 
-function look(dx, dy) { yaw -= dx * .002 * sensitivity; pitch = THREE.MathUtils.clamp(pitch - dy * .002 * sensitivity, -1.48, 1.48); }
+function look(dx, dy) { const zoom = camera ? camera.fov / 68 : 1; yaw -= dx * .002 * sensitivity * zoom; pitch = THREE.MathUtils.clamp(pitch - dy * .002 * sensitivity * zoom, -1.48, 1.48); }
 document.addEventListener('mousemove', event => { if (active && document.pointerLockElement) look(event.movementX, event.movementY); });
 $('world').addEventListener('pointerdown', event => {
   if (!active) return;
+  if(life?.scope.on){notify(life.tag());return;}
   if(document.pointerLockElement){const hit=pickDevice(null,true);if(hit)operate(hit);return;}
   drag = { startX:event.clientX,startY:event.clientY,  id: event.pointerId, x: event.clientX, y: event.clientY };
   $('world').setPointerCapture(event.pointerId);
@@ -653,9 +667,12 @@ renderer.setAnimationLoop(now => {
   guide?.update(reduced ? 0 : elapsed, layer === 'station' && zone === 'station' ? [position, ...guidanceRoute()] : [], p => surfaceHeight(p), targetIdentity().color, active && !transition && !arrived);
   audio.setRoom(zone==='station'?moduleAt(position)?.id:zone);
   audio.update({position:{...position,y:camera.position.y},yaw,dt,distance:movedDistance,sprinting:keys.has('ShiftLeft')||keys.has('ShiftRight'),zone,doors:[...world.doors,...world.expansion.doors,...world.services.doors]});
+  life?.update(elapsed, dt);
   hudTime += dt;
   if (hudTime > .065) { updateHUD(); hudTime = 0; }
-  $('cycle').textContent = `07:${String(24 + Math.floor(elapsed / 60) % 36).padStart(2,'0')}:${String(Math.floor(elapsed) % 60).padStart(2,'0')}`;
+  $('cycle').textContent = life ? `${life.clockText()}${life.clock.night > .5 ? ' · NIGHT' : ''}` : '07:00';
+  renderer.info.reset();
+  world.docking?.renderFeed(renderer, scene, { ...position, layer });
   renderer.info.reset();
   renderGame();
 });
@@ -663,10 +680,13 @@ renderer.setAnimationLoop(now => {
 if (import.meta.env.DEV) {
   let pointClouds = 0; scene.traverse(object => { if (object.isPoints) pointClouds++; });
   window.__SENTIENT__ = {
-    snapshot: () => ({ layer, zone:currentZone(), transition:transition?{time:transition.time,descending:transition.descending}:null, audio:audio.getState(), expansion:world.expansion.getState(), expansionStats:world.expansion.stats, interactiveStats:world.interactive.stats, spaceStats:world.spaceStats, exteriorStats:world.exteriorStats, corridorStats:world.corridorStats, viewportStats:world.corridorViewports.stats, viewportViews:world.corridorViewports.views, meetingStats:world.meeting.stats, serviceStats:world.services.stats, habitationStats:world.habitation.stats, roomCharacterStats:world.roomCharacterStats, suitStats:world.suitStats, focusedDevice:focusedDevice?.id, devices:world.devices.map(d=>({id:d.id,roomId:d.roomId,zone:d.zone,label:d.label,x:d.x,y:d.y,z:d.z,range:d.range,approach:d.approach,state:typeof d.state==='function'?d.state():d.state})), raytrace: {state:photoState,error:photoError,...photoController?.stats()}, active, started, modal, position: { ...position }, elevation: floorHeight(), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, lighting: {quality,shadowsEnabled:renderer.shadowMap.enabled,shadowMapType:renderer.shadowMap.type,ssaoEnabled:!!ambientOcclusion?.enabled,bloomEnabled:!!bloom?.enabled,...world.lightingStats()}, lifeScienceStats:world.lifeScienceStats, quarterStats:world.quarterStats, fixtureStats:world.fixtureStats, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: guidanceRoute(), doors: (world.doors || []).map(d => ({ id: d.id, variant:d.variant, number:d.number, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
+    snapshot: () => ({ layer, zone:currentZone(), transition:transition?{time:transition.time,descending:transition.descending}:null, audio:audio.getState(), expansion:world.expansion.getState(), expansionStats:world.expansion.stats, interactiveStats:world.interactive.stats, spaceStats:world.spaceStats, exteriorStats:world.exteriorStats, corridorStats:world.corridorStats, viewportStats:world.corridorViewports.stats, viewportViews:world.corridorViewports.views, meetingStats:world.meeting.stats, serviceStats:world.services.stats, habitationStats:world.habitation.stats, roomCharacterStats:world.roomCharacterStats, suitStats:world.suitStats, lifeStats:life?.stats(), docking:{...world.docking?.state}, cabin:world.cabin?.(), focusedDevice:focusedDevice?.id, devices:world.devices.map(d=>({id:d.id,roomId:d.roomId,zone:d.zone,label:d.label,x:d.x,y:d.y,z:d.z,range:d.range,approach:d.approach,state:typeof d.state==='function'?d.state():d.state})), raytrace: {state:photoState,error:photoError,...photoController?.stats()}, active, started, modal, position: { ...position }, elevation: floorHeight(), cameraY: camera.position.y, sky: { backgroundType: scene.background?.isCubeTexture ? 'CubeTexture' : scene.background?.type, pointClouds }, lighting: {quality,shadowsEnabled:renderer.shadowMap.enabled,shadowMapType:renderer.shadowMap.type,ssaoEnabled:!!ambientOcclusion?.enabled,bloomEnabled:!!bloom?.enabled,...world.lightingStats()}, lifeScienceStats:world.lifeScienceStats, quarterStats:world.quarterStats, fixtureStats:world.fixtureStats, detailStats: world.detailStats, screenStats: world.screenStats, importedStats: world.importedStats, yaw, pitch, visited: [...visited], target: target.id, nearRoom: nearRoom?.id, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, rooms, route: guidanceRoute(), doors: (world.doors || []).map(d => ({ id: d.id, variant:d.variant, number:d.number, x: d.x, z: d.z, axis: d.axis, openness: d.openness })), colliders: world.colliders || [] }),
     // Development-only positioning lets the browser test inspect every terminal.
     teleport: (x, z, facing = 0, deck = 'station', tilt = 0) => { layer=deck;transition=null;position = { x, z }; eyeHeight = floorHeight()+1.6; yaw = facing; pitch = tilt; },
     renderInfo: () => renderer.info,
+    startDrill: () => life.startDrill(elapsed),
+    aimAtSite: () => { const site = life.nearestSite(); if (!site) return null; const d = site.point.clone().sub(camera.position); yaw = Math.atan2(-d.x, -d.z); pitch = Math.atan2(d.y, Math.hypot(d.x, d.z)); return site.id; },
+    setElapsed: value => { elapsed = value; },
     viewportClearance: () => world.corridorViewports.checkSightlines(world.root),
   };
 }

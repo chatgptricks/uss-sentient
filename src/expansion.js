@@ -53,16 +53,9 @@ export function addExpansion(ctx) {
   for(let i=0;i<3;i++) {
     const x=5.2+i*1.05;
     box(x,1.29,1.22,.74,1.74,.20,M.graphite);
-    box(x,1.45,1.04,.44,.75,.23,M.padding);
-    const helmet=addMesh(new THREE.SphereGeometry(.23,16,12),M.enamel);helmet.position.set(x,2.00,1.03);
-    const visor=addMesh(new THREE.SphereGeometry(.235,16,8,0,Math.PI),dark);visor.rotation.y=Math.PI;visor.position.copy(helmet.position);
-    for(const s of [-1,1]) {
-      kit.pipe([x+s*.27,.8,1.05],[x+s*.27,1.65,1.05],.092,metal,12);
-      kit.pipe([x+s*.26,1.8,1.20],[x+s*.26,2.15,1.20],.023,M.accent);
-    }
-    for(let j=0;j<5;j++)box(x-.22+j*.11,.62,1.07,.035,.10,.08,j%2?M.silver:M.accent);
-    label(`SUIT 0${i+1}`,'O₂ / READY',x,.42,1.08,Math.PI,.60);
-    colliders.push({id:`airlock-suit-${i+1}`,x,z:1.07,w:.86,d:.42});
+    // NASA EMU suits hang here (eva-suit.js); the rack keeps its oxygen ports.
+    for(const side of [-1,1]) kit.pipe([x+side*.27,2.0,1.16],[x+side*.27,2.16,1.16],.023,M.accent);
+    label(`SUIT 0${i+1}`,'O₂ / READY',x,1.98,1.105,Math.PI,.60);
   }
   const airlock = {mode:'pressurized',phase:0,inner:1,outer:0,pressure:101.3};
   const pressureMap=texture(512,320,()=>{});pressureMap.userData.emissiveDisplay=true;
@@ -386,6 +379,10 @@ export function addExpansion(ctx) {
     },
     state:()=>({mode:surveyModes[surveyMode].name,channel:surveyMode+1,count:surveyCount,canvasState:surveyMode,canvasRevision:surveyRevision,heading:scope.rotation.y}),
   };devices.push(survey);
+  // The survey scope doubles as a telescope: main.js zooms the view and tags
+  // named Pelagia features that drift under the cupola as the planet turns.
+  const telescope={id:'cupola-telescope',label:'LOOK THROUGH THE TELESCOPE',x:scope.position.x,y:scope.position.y,z:scope.position.z,zone:'cupola',range:1.85,mesh:scope,mode:'telescope',sound:'console',
+    activate:()=>'Telescope coupled. Centre a feature in the reticle and press E to tag it. E with nothing locked returns.'};devices.push(telescope);
   function updateSurvey(dt) {
     const blend=1-Math.exp(-Math.max(0,dt)*4),heading=[.24,.81,-.36][surveyMode];
     scope.rotation.y+=(heading-scope.rotation.y)*blend;

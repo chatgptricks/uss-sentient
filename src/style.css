@@ -58,3 +58,38 @@ body:not(.playing) .location,body:not(.playing) .mission{display:none}
 body:not(.playing) .environment-status{display:none}
 @media(max-width:800px){.environment-status{left:18px;bottom:187px;max-width:220px;padding:8px 10px}.environment-status small{display:none}.interact{max-width:calc(100% - 24px);white-space:normal}.interact span{line-height:1.45}.room-row .num{min-width:34px}}
 @media(pointer:coarse){body.playing .environment-status{bottom:287px;max-width:220px}}
+/* Intercom captions, drill alert and the cupola telescope. */
+.intercom{position:absolute;left:50%;bottom:176px;transform:translateX(-50%);display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;max-width:min(560px,86vw);padding:10px 16px;background:#0b1115e6;border:1px solid #d6e1d22b;border-left:2px solid var(--lime);pointer-events:none}
+.intercom[hidden]{display:none}
+.intercom-dot{grid-row:span 2;width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 8px var(--lime);animation:intercom-pulse 1s ease-in-out infinite}
+.intercom small{font-size:9px;letter-spacing:1.6px;color:var(--lime)}
+.intercom p{margin:3px 0 0;font-size:13px;line-height:1.45;color:#e9ede4}
+@keyframes intercom-pulse{50%{opacity:.35}}
+.alert-banner{position:absolute;top:108px;left:50%;transform:translateX(-50%);display:flex;gap:16px;align-items:center;padding:10px 18px;background:#2a0b08ee;border:1px solid #ff4a3a88;color:#ffd9d2;font-size:11px;letter-spacing:1.2px;pointer-events:none;animation:alert-flash 1.1s ease-in-out infinite}
+.alert-banner[hidden]{display:none}
+.alert-banner b{color:#ff6a55;letter-spacing:1.8px}
+.alert-banner em{font-style:normal;color:#fff;font-variant-numeric:tabular-nums}
+@keyframes alert-flash{50%{border-color:#ff4a3a22;background:#1b0806ee}}
+.telescope{position:absolute;inset:0;pointer-events:none}
+.telescope[hidden]{display:none}
+.scope-vignette{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,transparent 0 31vmin,#000c 34vmin,#000 52vmin)}
+.scope-reticle{position:absolute;left:50%;top:50%;width:64px;height:64px;transform:translate(-50%,-50%);border:1px solid #cfff04aa;border-radius:50%}
+.scope-reticle::before,.scope-reticle::after{content:"";position:absolute;background:#cfff04aa}
+.scope-reticle::before{left:50%;top:-22px;bottom:-22px;width:1px}
+.scope-reticle::after{top:50%;left:-22px;right:-22px;height:1px}
+.scope-reticle i{position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:var(--lime)}
+.scope-mark{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.scope-mark i{width:22px;height:22px;border:1px solid #ffffffaa;transform:rotate(45deg)}
+.scope-mark b{font-size:9px;letter-spacing:1.4px;color:#fff;font-weight:500;text-shadow:0 1px 3px #000}
+.scope-mark.tagged i{border-color:#79d98c;background:#79d98c22}
+.scope-mark.locked i{border-color:var(--lime);box-shadow:0 0 10px #cfff0488;width:28px;height:28px}
+.scope-readout{position:absolute;left:50%;bottom:9vh;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.scope-readout small,.scope-readout em{font-size:9px;letter-spacing:1.6px;color:var(--muted);font-style:normal}
+.scope-readout b{font-size:13px;letter-spacing:1.4px;color:var(--lime);font-weight:500}
+.scope-readout span{font-size:10px;letter-spacing:1.2px;color:#e9ede4}
+body.telescope-mode .hud-top,body.telescope-mode .mission,body.telescope-mode .route-guidance,body.telescope-mode #waypoint,body.telescope-mode #crosshair{opacity:0}
+.survey-list{display:grid;gap:8px;margin-top:12px}
+.survey-row{display:grid;gap:3px;padding:10px 12px;border:1px solid var(--line);opacity:.55}
+.survey-row.tagged{opacity:1;border-color:#79d98c55}
+.survey-row b{font-size:12px;font-weight:500;color:#e9ede4}
+.survey-row span{font-size:11px;color:var(--muted);line-height:1.5}

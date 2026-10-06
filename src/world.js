@@ -26,8 +26,11 @@ import { addServiceDetails } from './service-details.js';
 import { addHabitationProps } from './habitation-props.js';
 import { addWayfinding } from './wayfinding.js';
 import { addEvaSuits } from './eva-suit.js';
+import { createDocking } from './docking.js';
+import { addEvaTask } from './eva-task.js';
 
 const LIME = 0xcfff04;
+const cabinWarm = new THREE.Color(0xffb27a), cabinRed = new THREE.Color(0xff3020);
 const TAU = Math.PI * 2;
 
 /** A human-scale pressure vessel. Every hull surface follows the shared floor plan. */
@@ -465,6 +468,8 @@ export async function createWorld(scene, rooms) {
   const expansion = addExpansion(detailContext);
   const exteriorStats = addExteriorDetails(detailContext);
   endSection();
+  const docking = createDocking(detailContext);
+  const evaTask = addEvaTask(detailContext);
 
 
   const spaceStats = addSpaceEnvironment({scene,root,animated,texture,mat,addMesh,resourceMaterials:materials,resourceGeometries:geometries,resourceTextures:textures});
@@ -488,9 +493,16 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, wayfindingStats, suitStats,
-    devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
+    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, wayfindingStats, suitStats, docking, evaTask,
+    devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices,...evaTask.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
+    /** brightness 0–1, warmth 0–1 (night), alert 0–1 (drill red light). */
+    setCabin(next) {
+      lighting.setCabin(next); const c = lighting.cabin;
+      whiteLight.emissiveIntensity = 2.2 * (.3 + .7 * c.brightness) * (1 + c.alert * .3);
+      whiteLight.emissive.setHex(0xfff4df).lerp(cabinWarm, c.warmth).lerp(cabinRed, c.alert * .9);
+    },
+    cabin: () => ({ ...lighting.cabin }),
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
     animate(time, dt = 1 / 60, player, motionScale = 1) {
       for (const update of animated) update(time * motionScale);
@@ -500,6 +512,7 @@ export async function createWorld(scene, rooms) {
       movingHatch=services.update(time,dt,player,motionScale)||movingHatch;
       meeting.update(time,dt);
       habitation.update(time,dt*motionScale);
+      docking.update(time,dt); evaTask.update(time,dt);
       for (const door of doors) {
         const previous = door.openness;
         const distance = player ? Math.hypot(player.x - door.x, player.z - door.z) : Infinity;
@@ -516,7 +529,7 @@ export async function createWorld(scene, rooms) {
       if (player) lighting.update(player,dt,movingHatch);
     },
     dispose() {
-      meeting.dispose?.();services.dispose?.();habitation.dispose();
+      meeting.dispose?.();services.dispose?.();habitation.dispose();docking.dispose();
       lighting.dispose();
       root.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
       scene.remove(root); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose());

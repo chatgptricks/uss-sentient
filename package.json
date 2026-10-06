@@ -17,7 +17,8 @@
     "test:doors": "node tests/doors.mjs",
     "test:deployment": "node tests/deployment.mjs",
     "test:expansion": "node tests/expansion.mjs",
-    "test:audio": "node tests/audio.mjs"
+    "test:audio": "node tests/audio.mjs",
+    "test:life": "node tests/station-life.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

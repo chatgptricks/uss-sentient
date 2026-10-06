@@ -43,7 +43,7 @@ function patchTextures(mark) {
 }
 
 export async function addEvaSuits(ctx) {
-  const { MODULES, colliders, beginModule, endSection, kit, materials: M, resourceGeometries, resourceMaterials, resourceTextures } = ctx;
+  const { root, MODULES, colliders, beginModule, endSection, kit, materials: M, resourceGeometries, resourceMaterials, resourceTextures } = ctx;
   const base = import.meta.env?.BASE_URL || '/';
   const [gltf, mark] = await Promise.all([new GLTFLoader().loadAsync(`${base}${MODEL}`), sentientMark(base)]);
   const patches = patchTextures(mark);
@@ -63,10 +63,10 @@ export async function addEvaSuits(ctx) {
   template.traverse(o => { if (o.isMesh) stats.triangles += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3; });
 
   /** Mount a suit with its pack against a wall; `yaw` turns the model's front. */
-  function mount(parent, x, z, yaw, name) {
+  function mount(parent, x, z, yaw, name, scale = SCALE) {
     const suit = template.clone(true); suit.name = name;
-    suit.scale.setScalar(SCALE); suit.rotation.y = yaw;
-    suit.position.set(x, .045 - BOUNDS.feet * SCALE, z);
+    suit.scale.setScalar(scale); suit.rotation.y = yaw;
+    suit.position.set(x, .045 - BOUNDS.feet * scale, z);
     parent.add(suit); stats.suits++;
     return suit;
   }
@@ -84,5 +84,15 @@ export async function addEvaSuits(ctx) {
   for (const side of [-1, 1]) kit.cuboid(wallFace - .07, 1.45, z + side * .17, .14, .06, .05, M.silver);
   endSection();
   colliders.push({ id: 'eva-suit-front-door', x: (x + BOUNDS.front * SCALE + wallFace) / 2, z, w: wallFace - (x + BOUNDS.front * SCALE), d: (BOUNDS.right - BOUNDS.left) * SCALE });
+
+  // A1 suit bay: three smaller EMU sizes hang on the north rack panels, packs
+  // to the wall, leaving the walk line through the airlock clear.
+  const BAY = .82, panelFace = 1.12;
+  for (let i = 0; i < 3; i++) {
+    const bx = 5.2 + i * 1.05, bz = panelFace - BOUNDS.back * BAY - .01;
+    mount(root, bx, bz, 0, `A1 / EMU 0${i + 1}`, BAY);
+    kit.cuboid(bx, .022, bz + .12, .74, .045, .6, M.graphite, 0, root);
+    colliders.push({ id: `airlock-suit-${i + 1}`, x: bx, z: (panelFace + bz + BOUNDS.front * BAY) / 2, w: .88, d: panelFace - (bz + BOUNDS.front * BAY) });
+  }
   return stats;
 }
