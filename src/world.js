@@ -24,6 +24,7 @@ import { addCorridorWindows } from './corridor-windows.js';
 import { addMeetingDetails } from './meeting-details.js';
 import { addServiceDetails } from './service-details.js';
 import { addHabitationProps } from './habitation-props.js';
+import { addRealismDetails } from './realism-details.js';
 
 const LIME = 0xcfff04;
 const TAU = Math.PI * 2;
@@ -466,6 +467,9 @@ export async function createWorld(scene, rooms) {
   const expansion = addExpansion(detailContext);
   const exteriorStats = addExteriorDetails(detailContext);
   endSection();
+  // Last interior pass: it measures every earlier batch to find free wall space.
+  const realism = addRealismDetails({ ...detailContext,
+    pendingBatches: () => [...[...batches.values()].map(b => ({ ...b, geometry: unitBox })), ...kit.pending()] });
 
 
   const spaceStats = addSpaceEnvironment({scene,root,animated,texture,mat,addMesh,resourceMaterials:materials,resourceGeometries:geometries,resourceTextures:textures});
@@ -489,7 +493,7 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats,
+    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, realismStats: realism.stats,
     devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
@@ -501,6 +505,7 @@ export async function createWorld(scene, rooms) {
       movingHatch=services.update(time,dt,player,motionScale)||movingHatch;
       meeting.update(time,dt);
       habitation.update(time,dt*motionScale);
+      realism.update(time*motionScale,dt,player);
       for (const door of doors) {
         const previous = door.openness;
         const distance = player ? Math.hypot(player.x - door.x, player.z - door.z) : Infinity;

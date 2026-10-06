@@ -53,5 +53,5 @@ export function createDetailKit(root, geometries) {
     }
     return { batches: batches.size, instances };
   }
-  return { pipe, bolt, localPipe, localBolt, cuboid, toWorld, flush, setParent: parent => { activeParent = parent; } };
+  return { pipe, bolt, localPipe, localBolt, cuboid, toWorld, flush, pending: () => [...batches.values()], setParent: parent => { activeParent = parent; } };
 }

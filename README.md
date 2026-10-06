@@ -45,6 +45,14 @@ The map includes all three destinations and shows the lower deck under Forum. A 
 
 `npm run test:expansion` verifies the real two-way airlock journey, cupola descent/ascent, all seven clickable panels, map destinations, room audio and rendering. `npm run test:audio` runs standalone real Web Audio tests (gesture unlocking, audible output, spatial cues, profile changes, fixed allocations, muting and disposal). Set `AUDIO_GAME_URL=http://127.0.0.1:5173` to include mute preference persistence in the game UI.
 
+## Crew realism layer
+
+A final pass dresses every module and tube as a station people actually live in: beta-cloth stowage bags with webbing straps, handles and barcoded inventory tags; bungee cords holding laminated procedures, pens, scissors, flashlights and zip bags; velcro fields with tape rolls and tethered pens; crew photos and a child's drawing taped to the walls; and zip-tied cable runs that sag between clamps. Each module has a fire extinguisher and breathing apparatus with a red PFE/PBA placard, a fire port, an intercom, a smoke detector, utility outlets, a data patch panel and a photoluminescent egress marker pointing at a hatch. Air vents carry crew-taped streamers that flutter, around 115 status LEDs blink with steady, blinking, beacon and data-traffic patterns, location codes label every wall, grime gathers above the kick plates, scuffs mark the deck at hatch thresholds, and faint dust drifts through the cabin light (not outside in vacuum).
+
+Placement is measured, not guessed. `src/occupancy.js` turns every earlier batch, mesh and imported prop into oriented boxes; each item is accepted only where its footprint is free, backed by real hull, outside corridor windows and within 15 cm of the wall. Placement is seeded, so the station looks the same on every load. Everything shares one printed atlas and a small surface palette, adding about 42 draw calls and no lights; Performance mode is unchanged.
+
+`npm run test:realism` checks equipment in every module, one safety kit per module, wall inset, batching and movement, and captures five views. `tests/occupancy.test.js` covers the collision maths.
+
 ## Run locally
 
 Requires a recent Node.js version supported by Vite.
