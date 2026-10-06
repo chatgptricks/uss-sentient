@@ -7,7 +7,6 @@ export function addQuarterDetails(ctx) {
   const stats = { parts: 0, displays: 0, seats: 0, robotArms: 0, lockers: 0, racks: 0, floorColliders: 0 };
   const fabric = mat({ color: 0x88928b, roughness: .96, metalness: 0 });
   const ochre = mat({ color: 0xbd9b55, roughness: .61, metalness: .12 });
-  const visor = mat({ color: 0x23343d, roughness: .18, metalness: .64 });
   const B = (...args) => { stats.parts++; box(...args); };
   const L = (f, ...args) => { stats.parts++; localBox(f.origin, f.ry, ...args); };
   const P = (...args) => { stats.parts++; kit.pipe(...args); };
@@ -155,24 +154,10 @@ export function addQuarterDetails(ctx) {
     const f = frame(m, m.hx-.34, 1.33, -Math.PI/2);
     L(f, 0, 1.06, -.05, .62, 1.88, .20, M.graphite);
     for (const side of [-1,1]) L(f, side*.31, 1.06, .055, .05, 1.96, .14, M.enamel);
-    L(f, 0, 1.31, .14, .36, .54, .21, M.padding);
-    for (const side of [-1,1]) {
-      LP(f, [side*.21,1.52,.13], [side*.29,1.13,.17], .080, M.padding, 10);
-      LP(f, [side*.095,1.10,.13], [side*.095,.62,.15], .084, M.padding, 10);
-      L(f, side*.10, .56, .19, .17, .11, .27, M.graphite);
-      L(f, side*.30, 1.095, .18, .12, .14, .13, ochre);
-      L(f, side*.10, 1.33, .265, .043, .47, .028, M.seal);
-    }
-    L(f, 0, 1.37, .282, .26, .17, .06, M.enamel);
-    for (const x of [-.07,.07]) L(f, x, 1.40, .318, .043, .024, .013, M.accent);
-    const helmet = ctx.addMesh(new THREE.SphereGeometry(.213,18,12), M.enamel);
-    helmet.position.set(...point(f,0,1.84,.13)); helmet.scale.set(1,1.03,1);
-    const shield = ctx.addMesh(new THREE.SphereGeometry(.217,18,10,0,Math.PI*.70,Math.PI*.28,Math.PI*.44), visor);
-    shield.position.copy(helmet.position); shield.rotation.y=f.ry+Math.PI*.15; shield.scale.set(1,1.03,1);
-    LP(f, [-.14,1.55,.18], [-.14,1.64,.18], .035, M.silver, 10);
-    LP(f, [.14,1.55,.18], [.14,1.64,.18], .035, M.silver, 10);
-    placard(f, 'EVA / STOWED', 'ARRIVAL EQUIPMENT / SECURED', 0, .28, .083, .53);
-    localBlocker(m,f,'eva-gear',0,.12,.67,.46);
+    // The suit itself is NASA's EMU model, mounted by eva-suit.js. A header
+    // above the stand keeps its placard visible over the helmet.
+    L(f, 0, 2.11, -.02, .62, .2, .14, M.graphite);
+    placard(f, 'EVA / STOWED', 'EMU 03 / SENTIENT · CHARGED', 0, 2.11, .052, .53);
     const south = facet(m,4);
     for (let i=0;i<3;i++) {
       const x=(i-1)*.69;

@@ -52,7 +52,9 @@ try {
   assert.equal(initial.lighting.shadowMaps, 0, 'Default exploration allocates no shadow maps');
   assert.ok(initial.lighting.shadowCasters > 20 && initial.lighting.shadowReceivers > 20, 'Hull and authored props support optional shadow quality');
   assert.equal(initial.importedStats.modelsLoaded, 19, 'Every authored GLB model loaded');
-  assert.equal(loadedModelURLs.size, 19, 'The browser successfully fetched all 19 local GLBs');
+  assert.equal(loadedModelURLs.size, 20, 'The browser fetched all 19 Kenney GLBs and the NASA EMU suit');
+  assert.equal(initial.suitStats.suits, 1, 'The NASA EMU stands on the Arrival suit stand');
+  assert.equal(initial.suitStats.sentientPatches, 2, 'Sentient patches replace the flag and mission patch');
   assert.equal(Object.keys(initial.importedStats.types).length, 19, 'All 19 model types are placed in the station');
   assert.ok(Object.values(initial.importedStats.types).every(count => count > 0), 'Every model type has visible instances');
   assert.equal(initial.importedStats.instances, initial.importedStats.placements.length);

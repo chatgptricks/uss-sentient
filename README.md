@@ -102,6 +102,8 @@ The USS Sentient, its star, station architecture and scan mission are fictional.
 
 ## Imported props
 
+The stowed suit in the Front Door is NASA's real Extravehicular Mobility Unit model from NASA 3D Resources, with its MMU jetpack removed, simplified to 51k triangles and repainted in Sentient colours: off-white fabric, lime bands, graphite hardware, a smoked visor and Sentient shoulder patches. It stands on the Arrival don/doff stand; see [ASSET-CREDITS.md](docs/ASSET-CREDITS.md).
+
 Nineteen original Kenney GLB models supply computers, consoles, cargo cases, generators and communications equipment. A further 27 instrument screens, 220 physical controls and 22 gauges are built into the pressure hull. Selected reusable 3D assets are stored locally under `public/models/`, with licenses and provenance in [ASSET-CREDITS.md](docs/ASSET-CREDITS.md). Original files are kept small and load before exploration begins.
 
 ## GitHub Pages deployment

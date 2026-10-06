@@ -25,6 +25,7 @@ import { addMeetingDetails } from './meeting-details.js';
 import { addServiceDetails } from './service-details.js';
 import { addHabitationProps } from './habitation-props.js';
 import { addWayfinding } from './wayfinding.js';
+import { addEvaSuits } from './eva-suit.js';
 
 const LIME = 0xcfff04;
 const TAU = Math.PI * 2;
@@ -452,6 +453,7 @@ export async function createWorld(scene, rooms) {
   const fixtureStats = addFixtureDetails(detailContext);
   const screenStats = addScreenPanels(detailContext);
   const importedStats = await addImportedProps(detailContext);
+  const suitStats = await addEvaSuits(detailContext);
   const lifeScienceStats = addLifeScienceDetails(detailContext);
   const quarterStats = addQuarterDetails(detailContext);
   const interactive = addInteractiveDetails(detailContext);
@@ -486,7 +488,7 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, wayfindingStats,
+    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, wayfindingStats, suitStats,
     devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),

@@ -32,8 +32,14 @@ Only the selected models, their one required texture and license texts are copie
 
 The still-view renderer uses [three-gpu-pathtracer 0.0.24](https://github.com/gkjohnson/three-gpu-pathtracer/tree/v0.0.24) and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), by Garrett Johnson, under the MIT license. Exact dependency versions are retained in the lockfile. The renderer is loaded only when requested; its scene snapshots convert instanced equipment to static geometry and bake the existing Sentient palette and star shader into compatible materials. This is progressive WebGL path tracing, not a claim of dedicated hardware RT acceleration.
 
-Plant geometry, laboratory instruments, strategy furniture, EVA gear and department-specific hatch treatments are authored procedurally for this game. They reuse station materials and batched geometry; they require no external 3D service.
+Plant geometry, laboratory instruments, strategy furniture, the EVA suit stand and department-specific hatch treatments are authored procedurally for this game. They reuse station materials and batched geometry; they require no external 3D service.
 
 ## Habitation materials and modeled fittings
 
 The six-seat conference furniture, vacuum sanitation fittings, machinery rack, pressure-window shutters and secured personal equipment are original procedural meshes. The fabric packs use two CC0 normal/roughness maps from Rob Tuytel's Poly Haven Fabric Pattern 07; [the material provenance record](habitation-asset-credit.md) lists the original source, license, exact files and checksums. All files ship locally under the GitHub Pages base path.
+
+## NASA Extravehicular Mobility Unit
+
+The stowed suit in the Front Door is NASA's **Extravehicular Mobility Unit** model from [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Extravehicular%20Mobility%20Unit) (`Extravehicular Mobility Unit.glb`, 3.4 MB, SHA-256 `4dd79f1f8e02ab39bc15d87a7bbeda1f437e1103ab7661f7797340e0c114f372`). NASA 3D Resources models are released for public use; NASA does not endorse this project, and the suit's appearance here is not an official NASA design.
+
+Changes for the game (`public/models/nasa/emu-sentient.glb`, SHA-256 `099afc3a83645fb2b9d55acc809bf45e2278c6e9a370f68604f320b63698f1cc`): the Manned Maneuvering Unit jetpack (side towers, hand controllers and frames) and duplicated mesh layers were removed, the geometry was simplified from 343k to 51k triangles, and the suit was repainted in Sentient colours: off-white thermal fabric, lime leg bands and neck ring, graphite hardware and a smoked visor in place of the gold one. At load time `src/eva-suit.js` paints Sentient artwork over the original shoulder flag and mission patch; the chest control-box labels remain NASA's.
