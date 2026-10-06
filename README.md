@@ -45,6 +45,17 @@ The map includes all three destinations and shows the lower deck under Forum. A 
 
 `npm run test:expansion` verifies the real two-way airlock journey, cupola descent/ascent, all seven clickable panels, map destinations, room audio and rendering. `npm run test:audio` runs standalone real Web Audio tests (gesture unlocking, audible output, spatial cues, profile changes, fixed allocations, muting and disposal). Set `AUDIO_GAME_URL=http://127.0.0.1:5173` to include mute preference persistence in the game UI.
 
+## Wayfinding
+
+Every department has one identity used everywhere: a colour, a symbol and a short purpose line (Front Door teal, Floor orange, Archive gold, Commons green, Forum violet, Lab blue, Bridge lime).
+
+- **Door portals:** each hatch face shows the room beyond it in that room's colour, with its number, symbol and name, and coloured light runs on both jambs. Faces inside a department also list the further rooms reached through that hatch ("also this way").
+- **Deck gate markers:** in front of every exit hatch, a floor marker names the room ahead, like an airport gate.
+- **Guide light:** after choosing a destination (M), a Battle School-style light line in the destination's colour runs along the deck and through the hatches, with pulses flowing towards it. The HUD says which colour to follow.
+- **Map and directory:** rooms, numbers and the route are drawn in the same colours.
+
+The shared identity lives in `src/room-identity.js`, door portals and gate markers in `src/wayfinding.js`, and the guide light in `src/guide-line.js`.
+
 ## Run locally
 
 Requires a recent Node.js version supported by Vite.

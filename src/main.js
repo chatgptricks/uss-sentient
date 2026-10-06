@@ -12,6 +12,8 @@ import { LINKS, modulePolygon, moduleAt, routeTo, surfaceHeight, insidePolygon }
 import { createStationAudio } from './audio.js';
 import { CUPOLA, EXTENSION_AREAS, CUPOLA_AREAS, EXTENSION_DESTINATIONS, expansionZone } from './expansion-layout.js';
 import { AMENITIES, findAmenityRoute, interactionBlocked, clearSegment } from './amenities.js';
+import { identityOf } from './room-identity.js';
+import { createGuideLine } from './guide-line.js';
 import './style.css';
 
 const icons = {
@@ -43,6 +45,8 @@ let layer = 'station', transition = null, focusedDevice = null, movedDistance = 
 const interactionRay = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const destinations = [...rooms,...EXTENSION_DESTINATIONS,...AMENITIES];
 let amenityGuidance = null;
+// Extension destinations borrow the colour of the department they are reached from.
+const targetIdentity = () => identityOf(target.roomId || { airlock: 'front-door', exterior: 'front-door', cupola: 'forum' }[target.id] || target.id);
 let exitGuidance = null;
 let quality = 'performance';
 let eyeHeight = surfaceHeight(START) + 1.6;
@@ -73,7 +77,7 @@ $('app').innerHTML = `
   <div id="loading" class="loading"><img src="${import.meta.env.BASE_URL}brand/sentient-logo.svg" alt="Sentient"/><div class="loading-track"></div><span>ESTABLISHING ORBIT</span></div>
 `;
 
-let renderer, scene, camera, composer, bloom, ambientOcclusion, world;
+let renderer, scene, camera, composer, bloom, ambientOcclusion, world, guide;
 let photoState = 'idle', photoController, photoAbort, photoError = null, photoSession = 0;
 await Promise.all([document.fonts.load('400 16px Space'), document.fonts.load('500 16px Space')]).catch(() => {});
 try {
@@ -95,6 +99,7 @@ try {
   camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, .08, 1800);
   camera.rotation.order = 'YXZ';
   world = await createWorld(scene, rooms);
+  guide = createGuideLine(scene);
   applyQuality();
   requestAnimationFrame(() => { $('loading').hidden = true; });
 } catch (error) {
@@ -241,7 +246,7 @@ function interact() {
 
 function openMap() {
   openModal('map', 'Find your next discovery.', 'USS SENTIENT / DECK DIRECTORY',
-    `<p class="modal-intro">Choose a destination. The Forum has a six-seat briefing bay; the Commons has a bathroom, and the Floor has a machinery annex. Automatic hatches connect the departments. Open the Forum floor hatch for the lower cupola; cycle the Arrival airlock for EVA.</p><div class="deck-layout"><div class="deck-visual"><canvas id="deck-canvas" width="560" height="720" aria-label="Station floor plan with your position and route"></canvas></div><div class="room-list">${destinations.map(r => `<button class="room-row ${target.id === r.id ? 'selected' : ''}" data-destination="${r.id}" aria-label="Navigate to ${esc(r.name)}"><span class="num">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${esc(r.function)}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '↗'}</span></button>`).join('')}</div></div>`, `<span class="eyebrow">${visited.size} OF 7 SIGNALS CONNECTED</span><span class="eyebrow" style="color:#cfff04">● YOU &nbsp; ━ ROUTE &nbsp; ◇ DESTINATION</span>`);
+    `<p class="modal-intro">Choose a destination. The Forum has a six-seat briefing bay; the Commons has a bathroom, and the Floor has a machinery annex. Automatic hatches connect the departments. Open the Forum floor hatch for the lower cupola; cycle the Arrival airlock for EVA.</p><div class="deck-layout"><div class="deck-visual"><canvas id="deck-canvas" width="560" height="720" aria-label="Station floor plan with your position and route"></canvas></div><div class="room-list">${destinations.map(r => `<button class="room-row ${target.id === r.id ? 'selected' : ''}" data-destination="${r.id}" aria-label="Navigate to ${esc(r.name)}"><span class="num" style="color:${identityOf(r.roomId || { airlock: 'front-door', exterior: 'front-door', cupola: 'forum' }[r.id] || r.id).color}">${r.number}</span><span><span class="name">${esc(r.name)}</span><small>${esc(r.function)}</small></span><span class="room-state">${visited.has(r.id) ? '✓' : '↗'}</span></button>`).join('')}</div></div>`, `<span class="eyebrow">${visited.size} OF 7 SIGNALS CONNECTED</span><span class="eyebrow" style="color:#cfff04">● YOU &nbsp; ━ ROUTE &nbsp; ◇ DESTINATION</span>`);
   renderMap($('deck-canvas'), true);
   $('deck-canvas').onclick = event => {
     const canvas = event.currentTarget, bounds = canvas.getBoundingClientRect();
@@ -249,12 +254,12 @@ function openMap() {
     const x = ((event.clientX-bounds.left)/bounds.width*canvas.width-canvas.width/2)/scale+2;
     const z = ((event.clientY-bounds.top)/bounds.height*canvas.height-canvas.height/2)/scale-18.9;
     const module = moduleAt({x,z});
-    if (module) { target = rooms.find(r => r.id===module.id); notify(`Route set: ${target.name}. Follow the lime arrow.`); closeModal(); }
+    if (module) { target = rooms.find(r => r.id===module.id); notify(`Route set: ${target.name}. Follow the ${targetIdentity().name} light on the deck.`); closeModal(); }
   };
   document.querySelectorAll('[data-destination]').forEach(button => {
     button.onclick = () => {
       target = destinations.find(r => r.id === button.dataset.destination);
-      notify(`Route set: ${target.name}. Follow the lime arrow.`);
+      notify(`Route set: ${target.name}. Follow the ${targetIdentity().name} light on the deck.`);
       closeModal();
     };
   });
@@ -439,8 +444,10 @@ function renderMap(canvas, large = false) {
   for (const room of rooms) {
     const points = modulePolygon(room);
     ctx.beginPath(); points.forEach((p,i) => i ? ctx.lineTo(px(p.x),pz(p.z)) : ctx.moveTo(px(p.x),pz(p.z))); ctx.closePath();
-    ctx.fillStyle = visited.has(room.id) ? '#2c3820' : '#101d19'; ctx.strokeStyle = target.id === room.id ? '#cfff04' : '#789781'; ctx.lineWidth = target.id === room.id ? 2 : 1;
-    ctx.fill(); ctx.stroke();
+    const color = identityOf(room.id).color;
+    ctx.fillStyle = '#101d19'; ctx.fill();
+    ctx.fillStyle = color + (visited.has(room.id) ? '40' : '22'); ctx.fill();
+    ctx.strokeStyle = target.id === room.id ? color : color + '99'; ctx.lineWidth = target.id === room.id ? 3 : 1.2; ctx.stroke();
   }
   // Exterior gantry and the lower layer share the station's navigational map.
   ctx.strokeStyle='#789ba1';ctx.lineWidth=1;ctx.fillStyle='#18313a';
@@ -451,14 +458,14 @@ function renderMap(canvas, large = false) {
   ctx.fillText('05↓',px(0),pz(-18.6));
   const route = [position, ...guidanceRoute()];
   ctx.beginPath(); route.forEach((p,i) => i ? ctx.lineTo(px(p.x),pz(p.z)) : ctx.moveTo(px(p.x),pz(p.z)));
-  ctx.strokeStyle = '#cfff04'; ctx.lineWidth = large ? 2.5 : 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = targetIdentity().color; ctx.lineWidth = large ? 2.5 : 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
   for (const link of LINKS) for (const p of [link.a,link.b]) {
     ctx.fillStyle = '#d9ddd0';
     ctx.fillRect(px(p.x)-(link.a.x===link.b.x?3:1),pz(p.z)-(link.a.x===link.b.x?1:3),link.a.x===link.b.x?6:2,link.a.x===link.b.x?2:6);
   }
   for (const room of rooms) {
     ctx.textAlign = 'center'; ctx.font = `${large ? 22 : 19}px Space, sans-serif`;
-    ctx.fillStyle = target.id === room.id ? '#cfff04' : '#f5f5ef';
+    ctx.fillStyle = identityOf(room.id).color;
     ctx.fillText(room.number,px(room.x),pz(room.z)-3);
     ctx.font = `${large ? 15 : 10}px Space, sans-serif`; ctx.fillStyle = '#c7d0c9';
     if (large) { ctx.fillText(room.shortName.toUpperCase(),px(room.x),pz(room.z)+16); ctx.font='11px Space';ctx.fillStyle='#819b91';ctx.fillText(`${room.elevation>0?'+':''}${room.elevation.toFixed(2)} m`,px(room.x),pz(room.z)+31); }
@@ -519,7 +526,9 @@ function updateHUD() {
   const bearing = Math.atan2(next.x-position.x, -(next.z-position.z)) + yaw;
   $('route-arrow').style.transform = `rotate(${bearing}rad)`;
   $('route-destination').textContent = `${target.shortName.toUpperCase()} · ${Math.ceil(distance)} m`;
-  $('route-step').textContent = nearRoom?.id === target.id ? 'PRESS E TO CONNECT' : room?.id === target.id ? 'DEPARTMENT TERMINAL' : 'FOLLOW THE HATCHES';
+  const identity = targetIdentity();
+  $('route-arrow').style.color = identity.color;
+  $('route-step').textContent = nearRoom?.id === target.id ? 'PRESS E TO CONNECT' : room?.id === target.id ? 'DEPARTMENT TERMINAL' : `FOLLOW THE ${identity.name.toUpperCase()} LIGHT`;
   if(layer==='cupola') $('route-step').textContent=target.id==='cupola'?'OBSERVATION DECK':'CLIMB THE LADDER TO RETURN';
   else if(zone==='airlock') $('route-step').textContent='E / CYCLE AIRLOCK PRESSURE';
   else if(zone==='exterior') $('route-step').textContent='FOLLOW THE EVA GANTRY';
@@ -640,6 +649,8 @@ renderer.setAnimationLoop(now => {
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
   const zone=currentZone();
   world.animate?.(elapsed, dt, {...position,y:camera.position.y,layer,zone}, reduced ? .15 : 1);
+  const arrived = nearRoom?.id === target.id || (target.approach && Math.hypot(target.approach.x-position.x,target.approach.z-position.z) < .9);
+  guide?.update(reduced ? 0 : elapsed, layer === 'station' && zone === 'station' ? [position, ...guidanceRoute()] : [], p => surfaceHeight(p), targetIdentity().color, active && !transition && !arrived);
   audio.setRoom(zone==='station'?moduleAt(position)?.id:zone);
   audio.update({position:{...position,y:camera.position.y},yaw,dt,distance:movedDistance,sprinting:keys.has('ShiftLeft')||keys.has('ShiftRight'),zone,doors:[...world.doors,...world.expansion.doors,...world.services.doors]});
   hudTime += dt;

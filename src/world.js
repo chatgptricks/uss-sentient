@@ -24,6 +24,7 @@ import { addCorridorWindows } from './corridor-windows.js';
 import { addMeetingDetails } from './meeting-details.js';
 import { addServiceDetails } from './service-details.js';
 import { addHabitationProps } from './habitation-props.js';
+import { addWayfinding } from './wayfinding.js';
 
 const LIME = 0xcfff04;
 const TAU = Math.PI * 2;
@@ -407,13 +408,8 @@ export async function createWorld(scene, rooms) {
     const signalY = variant === 'bridge' ? 2.627 : 2.55, signalZ = variant === 'bridge' ? .27 : .205;
     const signal = solidBox(group, 0, signalY, signalZ, .57, .045, .03, signalMaterial);
     solidBox(group, 0, signalY, -signalZ, .57, .045, .03, signalMaterial);
-    const current = MODULES.find(m => m.id === currentId), currentRoom = rooms.find(r => r.id === currentId), other = rooms.find(r => r.id === otherId);
-    const frontIsInside = axis === 'x' ? current.x > point.x : current.z > point.z;
-    const front = frontIsInside ? other : currentRoom, back = frontIsInside ? currentRoom : other;
-    if (variant !== 'bridge') {
-      textPlane(sign(front.shortName, 'AUTOMATIC PRESSURE HATCH', front.number), 1.08, .24, 0, 2.445, .215, 0, group);
-      textPlane(sign(back.shortName, 'AUTOMATIC PRESSURE HATCH', back.number), 1.08, .24, 0, 2.445, -.215, Math.PI, group);
-    }
+    const current = MODULES.find(m => m.id === currentId);
+    // Destination signs for both faces are added by the wayfinding pass.
     design.frame(group, variant);
     // Collar feet define the true 1.82m clear opening inside the 2.25m tube.
     for (const side of [-1, 1]) {
@@ -448,6 +444,7 @@ export async function createWorld(scene, rooms) {
     materials: {hull,enamel,padding,seal,graphite,silver,accent,whiteLight,blueLight,glass,viewportGlass},
     resourceMaterials: materials, resourceGeometries: geometries, resourceTextures: textures };
   addHullDetails(detailContext);
+  const wayfindingStats = addWayfinding(detailContext);
   const corridorStats=addCorridorDetails(detailContext);
   const corridorViewports=addCorridorWindows(detailContext);
   addDepartmentDetails(detailContext);
@@ -489,7 +486,7 @@ export async function createWorld(scene, rooms) {
   const lighting = createStationLighting(root);
 
   return {
-    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats,
+    root, terminalMeshes, colliders, doors, expansion, interactive, meeting, services, habitation, spaceStats, exteriorStats, corridorStats, corridorViewports, roomCharacterStats, wayfindingStats,
     devices: [...interactive.devices,...expansion.devices,...corridorViewports.devices,...meeting.devices,...services.devices,...habitation.devices], detailStats, screenStats, importedStats, fixtureStats, lifeScienceStats, quarterStats,
     setQuality: lighting.setQuality,
     lightingStats: () => ({...lighting.stats(),shadowCasters,shadowReceivers}),
