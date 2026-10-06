@@ -149,6 +149,8 @@ export function createTracingMaterials(renderer) {
     if (Array.isArray(original)) return original.map(convert);
     if (!original?.isMaterial) throw new TypeError('Expected a Three.js material.');
     if (cache.has(original)) return cache.get(original);
+    // Shader surfaces may name a simpler stand-in for the path tracer.
+    if (original.userData?.traceMaterial) { const material = convert(original.userData.traceMaterial); cache.set(original, material); return material; }
     if (original.isMeshStandardMaterial || original.isMeshPhysicalMaterial) {
       const material = original.clone();
       if (original.customProgramCacheKey?.() === 'sentient-kenney-instrument-v1') {

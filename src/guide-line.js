@@ -24,7 +24,7 @@ export function createGuideLine(scene) {
   });
   material.toneMapped = false;
   const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
-  mesh.name = 'Guide light'; mesh.frustumCulled = false; mesh.renderOrder = 4; mesh.userData.excludeFromAO = true;
+  mesh.name = 'Guide light'; mesh.frustumCulled = false; mesh.renderOrder = 4; mesh.userData.excludeFromAO = true; mesh.userData.noTrace = true;
   scene.add(mesh);
   let key = '';
 

@@ -5,7 +5,7 @@ import * as THREE from 'three';
  * Three renders scene.background with camera rotation but without translation,
  * so these pinpoints cannot slide across a window as the player walks past it.
  */
-export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, resourceMaterials, resourceTextures }) {
+export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, resourceMaterials, resourceTextures, resourceGeometries }) {
   let seed = 18593;
   const random = () => {
     seed = seed * 16807 % 2147483647;
@@ -77,8 +77,10 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
     const y=1-2*(i+.5)/plateCount, ring=Math.sqrt(1-y*y), angle=i*2.3999632297+(random()-.5)*.21;
     plateSeeds.set([Math.cos(angle)*ring,y,Math.sin(angle)*ring],i*3);
   }
+  let glowPixels;
   const planetMap = texture(3072,1536,(ctx,width,height) => {
     const pixels=ctx.createImageData(width,height), data=pixels.data;
+    glowPixels=ctx.createImageData(width>>1,height>>1);
     const sinLongitude=new Float32Array(width), cosLongitude=new Float32Array(width);
     for (let x=0;x<width;x++) {
       const phi=x/(width-1)*Math.PI*2;
@@ -140,23 +142,16 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
         r=r*(1-veil)+(174+pearl*17)*veil;
         g=g*(1-veil)+(145+pearl*18)*veil;
         b=b*(1-veil)+(79+pearl*106)*veil;
-        const incidence=nx*solarDirection.x+ny*solarDirection.y+nz*solarDirection.z;
-        const daylight=step(-.055,.07,incidence)*Math.pow(Math.max(0,incidence),.42);
-        const light=.055+daylight*.945;
-        const dusk=Math.exp(-Math.abs(incidence)*28)*.045;
+        // Albedo only: day, night and the terminator are lit per pixel so the
+        // planet can turn beneath the station. Fissure light goes to its own map.
         const i=(y*width+x)*4;
-        data[i]=Math.min(255,r*light+dusk*85+vein*(170-mineral*110));
-        data[i+1]=Math.min(255,g*light+dusk*58+vein*(184+mineral*22));
-        data[i+2]=Math.min(255,b*light+2+dusk*119+vein*(39+mineral*157));
-        data[i+3]=255;
+        data[i]=Math.min(255,r);data[i+1]=Math.min(255,g);data[i+2]=Math.min(255,b+2);data[i+3]=255;
+        if(!(x&1)&&!(y&1)){const j=((y>>1)*(width>>1)+(x>>1))*4,gd=glowPixels.data;
+          gd[j]=Math.min(255,vein*(170-mineral*110));gd[j+1]=Math.min(255,vein*(184+mineral*22));gd[j+2]=Math.min(255,vein*(39+mineral*157));gd[j+3]=255;}
       }
     }
     ctx.putImageData(pixels,0,0);
-    const lightingAt=(x,y)=>{
-      const phi=x/(width-1)*Math.PI*2,theta=y/(height-1)*Math.PI,s=Math.sin(theta);
-      const incidence=-Math.cos(phi)*s*solarDirection.x-Math.sin(phi)*s*solarDirection.y+Math.cos(theta)*solarDirection.z;
-      return .055+step(-.055,.07,incidence)*Math.pow(Math.max(0,incidence),.42)*.945;
-    };
+    const lightingAt=()=>1; // surface marks are albedo; lighting happens in the shader
     const ink=(r,g,b,light,alpha)=>`rgba(${Math.round(r*light)},${Math.round(g*light)},${Math.round(b*light)},${alpha})`;
     // Discontinuous, angular faults introduce a smaller geological scale than
     // the main plates. A fine copper lip borders each dark fracture.
@@ -210,36 +205,10 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
   });
   planetMap.name='Pelagia / fractured mineral plates, fluorescent basins and sulfur mist';
   planetMap.wrapS=THREE.RepeatWrapping;
-  const planetMaterial=new THREE.MeshBasicMaterial({map:planetMap,toneMapped:false});
-  planetMaterial.name='Pelagia / prelit planetary surface'; resourceMaterials.add(planetMaterial);
-  const planetGeometry=new THREE.SphereGeometry(planetRadius,128,80);
-  planetGeometry.rotateX(Math.PI/2);
-  const planet=addMesh(planetGeometry,planetMaterial,root);
-  planet.name='Pelagia / alien mineral planet beneath USS Sentient'; planet.position.copy(planetPosition);
-  planet.castShadow=false; planet.receiveShadow=false; planet.userData.excludeFromAO=true;
-
-  // Vertex alpha supplies a layered mineral limb without a fragment shader. Its
-  // fixed viewing axis is the cupola; station-scale movement barely changes it.
-  const atmosphereGeometry=new THREE.SphereGeometry(planetRadius+1.05,128,80);
-  const surface=atmosphereGeometry.attributes.position, atmosphereColors=new Float32Array(surface.count*4);
-  const cupola=new THREE.Vector3(0,-3.2,-22), point=new THREE.Vector3(), view=new THREE.Vector3(), normal=new THREE.Vector3();
-  for (let i=0;i<surface.count;i++) {
-    point.fromBufferAttribute(surface,i); normal.copy(point).normalize();
-    view.copy(cupola).sub(planetPosition).sub(point).normalize();
-    const facing=Math.max(0,normal.dot(view)), lit=step(-.12,.48,normal.dot(solarDirection));
-    const stratum=.5+.5*Math.sin((normal.x*.42+normal.y*.21+normal.z*.883)*132);
-    atmosphereColors.set([.48+stratum*.15,.29+stratum*.22,.12+stratum*.30,Math.pow(1-facing,5)*(.025+lit*.24)],i*4);
-  }
-  atmosphereGeometry.setAttribute('color',new THREE.BufferAttribute(atmosphereColors,4));
-  const atmosphereMaterial=new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,depthWrite:false,toneMapped:false,side:THREE.FrontSide});
-  atmosphereMaterial.name='Pelagia / sulfur, pearl and gold atmospheric limb'; resourceMaterials.add(atmosphereMaterial);
-  const atmosphere=addMesh(atmosphereGeometry,atmosphereMaterial,root);
-  atmosphere.name='Pelagia atmosphere'; atmosphere.position.copy(planetPosition);
-  atmosphere.castShadow=false; atmosphere.receiveShadow=false; atmosphere.userData.excludeFromAO=true;
-
-  // Fine, translucent mineral debris: one static draw with radial gaps and
-  // incomplete outer dust arcs. The ring never updates its texture in flight.
+  const glowMap=texture(1536,768,ctx=>ctx.putImageData(glowPixels,0,0));
+  glowMap.name='Pelagia / fissure luminescence';glowMap.wrapS=THREE.RepeatWrapping;
   const ringInner=118, ringOuter=172;
+  const ringNormal=new THREE.Vector3(-.43,.62,.655).normalize();
   const ringMap=texture(2048,256,(ctx,width,height)=>{
     const pixels=ctx.createImageData(width,height),data=pixels.data;
     for(let y=0;y<height;y++) {
@@ -261,17 +230,133 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
     ctx.putImageData(pixels,0,0);
   });
   ringMap.name='Pelagia / banded mineral dust rings';ringMap.wrapS=THREE.RepeatWrapping;
+
+  // Shared GLSL: world-space solar lighting and the ring's shadow band.
+  const sun={value:solarDirection.clone()}, center={value:planetPosition.clone()};
+  const ringUniforms={ringMap:{value:ringMap},ringNormal:{value:ringNormal},ringRadii:{value:new THREE.Vector2(ringInner,ringOuter)}};
+  const noiseGLSL=`
+    float hash3(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+    float vnoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+      return mix(mix(mix(hash3(i),hash3(i+vec3(1,0,0)),f.x),mix(hash3(i+vec3(0,1,0)),hash3(i+vec3(1,1,0)),f.x),f.y),
+                 mix(mix(hash3(i+vec3(0,0,1)),hash3(i+vec3(1,0,1)),f.x),mix(hash3(i+vec3(0,1,1)),hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
+    float fbm(vec3 p){float v=0.,a=.52;for(int k=0;k<5;k++){v+=vnoise(p)*a;p=p*2.04+vec3(3.1,7.7,1.9);a*=.5;}return v;}`;
+  const ringShadowGLSL=`
+    uniform sampler2D ringMap; uniform vec3 ringNormal; uniform vec2 ringRadii;
+    float ringShadow(vec3 p, vec3 toSun, vec3 c){
+      float d=dot(toSun,ringNormal); if(abs(d)<1e-4) return 0.;
+      float t=dot(c-p,ringNormal)/d; if(t<=0.) return 0.;
+      float r=length(p+toSun*t-c); if(r<ringRadii.x||r>ringRadii.y) return 0.;
+      return texture2D(ringMap,vec2(.5,(r-ringRadii.x)/(ringRadii.y-ringRadii.x))).a;
+    }`;
+  const surfaceVertex=`varying vec2 vUv; varying vec3 vN; varying vec3 vP;
+    void main(){vUv=uv;vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.);vP=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`;
+  const planetMaterial=new THREE.ShaderMaterial({
+    uniforms:{map:{value:planetMap},glowMap:{value:glowMap},sunDirection:sun,center,time:{value:0},...ringUniforms},
+    vertexShader:surfaceVertex,
+    fragmentShader:`uniform sampler2D map; uniform sampler2D glowMap; uniform vec3 sunDirection; uniform vec3 center; uniform float time;
+      varying vec2 vUv; varying vec3 vN; varying vec3 vP; ${ringShadowGLSL}
+      void main(){
+        vec3 n=normalize(vN), albedo=texture2D(map,vUv).rgb;
+        float incidence=dot(n,sunDirection);
+        float day=smoothstep(-.055,.07,incidence)*pow(max(incidence,0.),.42);
+        day*=1.-ringShadow(vP,sunDirection,center)*1.25;
+        float light=.04+max(day,0.)*.96;
+        vec3 dusk=vec3(.33,.23,.47)*exp(-abs(incidence)*24.)*.06;
+        // Fissures shimmer and read brighter on the night side.
+        vec3 glow=texture2D(glowMap,vUv).rgb*(.55+.75*(1.-clamp(day,0.,1.)))*(.86+.14*sin(time*.9+vUv.x*61.+vUv.y*23.));
+        // A faint mineral sheen where the sun glances off the plates.
+        vec3 v=normalize(cameraPosition-vP), h=normalize(v+sunDirection);
+        float sheen=pow(max(dot(n,h),0.),48.)*max(day,0.)*.12;
+        gl_FragColor=vec4(albedo*light+dusk+glow+vec3(.9,.82,.95)*sheen,1.);
+        #include <colorspace_fragment>
+      }`,
+    toneMapped:false,
+  });
+  planetMaterial.name='Pelagia / lit planetary surface'; resourceMaterials.add(planetMaterial);
+  // The ray tracer cannot run this shader; it gets the albedo as an emitter.
+  planetMaterial.userData.traceMaterial=new THREE.MeshBasicMaterial({map:planetMap,toneMapped:false});
+  resourceMaterials.add(planetMaterial.userData.traceMaterial);
+  const planetGeometry=new THREE.SphereGeometry(planetRadius,128,80);
+  planetGeometry.rotateX(Math.PI/2);
+  const planet=addMesh(planetGeometry,planetMaterial,root);
+  planet.name='Pelagia / alien mineral planet beneath USS Sentient'; planet.position.copy(planetPosition);
+  planet.castShadow=false; planet.receiveShadow=false; planet.userData.excludeFromAO=true;
+
+  // Drifting sulfur and pearl cloud banks, lit by the same sun and turning a
+  // little faster than the crust beneath them.
+  const cloudMaterial=new THREE.ShaderMaterial({
+    uniforms:{sunDirection:sun,center,time:{value:0},...ringUniforms},
+    vertexShader:`varying vec3 vO; varying vec3 vN; varying vec3 vP;
+      void main(){vO=normalize(position);vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.);vP=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+    fragmentShader:`uniform vec3 sunDirection; uniform vec3 center; uniform float time; varying vec3 vO; varying vec3 vN; varying vec3 vP;
+      ${noiseGLSL} ${ringShadowGLSL}
+      void main(){
+        vec3 o=vO; float t=time*.012;
+        vec3 warp=vec3(vnoise(o*3.+vec3(t,0.,0.)),vnoise(o*3.+vec3(0.,t,4.)),vnoise(o*3.+vec3(7.,0.,t)))-.5;
+        float bands=.5+.5*sin((o.x*.42+o.y*.21+o.z*.883)*18.+warp.x*6.);
+        float d=fbm(o*6.5+warp*1.6+vec3(t*1.7,0.,-t))*(.55+.45*bands);
+        float density=smoothstep(.5,.78,d);
+        vec3 n=normalize(vN); float incidence=dot(n,sunDirection);
+        float day=smoothstep(-.1,.2,incidence)*(1.-ringShadow(vP,sunDirection,center)*.9);
+        vec3 color=mix(vec3(.72,.6,.36),vec3(.86,.82,.9),smoothstep(.6,.9,d))*(.05+.95*max(day,0.));
+        gl_FragColor=vec4(color,density*.62);
+        #include <colorspace_fragment>
+      }`,
+    transparent:true, depthWrite:false, toneMapped:false,
+  });
+  cloudMaterial.name='Pelagia / drifting sulfur clouds'; resourceMaterials.add(cloudMaterial);
+  const clouds=addMesh(new THREE.SphereGeometry(planetRadius+.55,128,80),cloudMaterial,root);
+  clouds.name='Pelagia clouds'; clouds.position.copy(planetPosition); clouds.userData.noTrace=true;
+  clouds.castShadow=false; clouds.receiveShadow=false; clouds.userData.excludeFromAO=true; clouds.renderOrder=1;
+
+  // Atmosphere: a thin lit limb over the disc and a soft halo beyond it.
+  const limbShader=(inner)=>`uniform vec3 sunDirection; varying vec3 vN; varying vec3 vP;
+    void main(){
+      vec3 n=normalize(vN), v=normalize(cameraPosition-vP);
+      float f=${inner?'pow(1.-max(dot(n,v),0.),4.2)':'pow(clamp(1.-abs(dot(n,v))-.08,0.,1.),2.6)'};
+      float lit=smoothstep(-.35,.45,dot(n,sunDirection));
+      vec3 color=mix(vec3(.95,.66,.28),vec3(.72,.62,1.),f)*(.06+lit*1.05);
+      gl_FragColor=vec4(color*f*${inner?'.9':'1.2'},1.);
+      #include <colorspace_fragment>
+    }`;
+  const limbVertex=`varying vec3 vN; varying vec3 vP;
+    void main(){vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.);vP=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`;
+  const atmosphereMaterial=new THREE.ShaderMaterial({uniforms:{sunDirection:sun},vertexShader:limbVertex,fragmentShader:limbShader(true),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+  atmosphereMaterial.name='Pelagia / sulfur, pearl and gold atmospheric limb'; resourceMaterials.add(atmosphereMaterial);
+  const atmosphere=addMesh(new THREE.SphereGeometry(planetRadius+1.05,128,80),atmosphereMaterial,root);
+  atmosphere.name='Pelagia atmosphere'; atmosphere.position.copy(planetPosition); atmosphere.userData.noTrace=true;
+  atmosphere.castShadow=false; atmosphere.receiveShadow=false; atmosphere.userData.excludeFromAO=true; atmosphere.renderOrder=2;
+  const haloMaterial=new THREE.ShaderMaterial({uniforms:{sunDirection:sun},vertexShader:limbVertex,fragmentShader:limbShader(false),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.BackSide,toneMapped:false});
+  haloMaterial.name='Pelagia / atmospheric halo'; resourceMaterials.add(haloMaterial);
+  const halo=addMesh(new THREE.SphereGeometry(planetRadius*1.045,96,64),haloMaterial,root);
+  halo.name='Pelagia halo'; halo.position.copy(planetPosition); halo.userData.noTrace=true;
+  halo.castShadow=false; halo.receiveShadow=false; halo.userData.excludeFromAO=true;
+
+  // Fine, translucent mineral debris with the planet's shadow falling across it.
   const ringGeometry=new THREE.RingGeometry(ringInner,ringOuter,256,8);
   const ringPositions=ringGeometry.attributes.position,ringUV=ringGeometry.attributes.uv;
   for(let i=0;i<ringPositions.count;i++) {
     const x=ringPositions.getX(i),y=ringPositions.getY(i);
     ringUV.setXY(i,(i%257)/256,(Math.hypot(x,y)-ringInner)/(ringOuter-ringInner));
   }
-  const ringMaterial=new THREE.MeshBasicMaterial({map:ringMap,transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,toneMapped:false});
+  const ringMaterial=new THREE.ShaderMaterial({
+    uniforms:{map:{value:ringMap},sunDirection:sun,center,radius:{value:planetRadius}},
+    vertexShader:surfaceVertex,
+    fragmentShader:`uniform sampler2D map; uniform vec3 sunDirection; uniform vec3 center; uniform float radius; varying vec2 vUv; varying vec3 vP; varying vec3 vN;
+      void main(){
+        vec4 c=texture2D(map,vUv);
+        vec3 oc=vP-center; float b=dot(oc,sunDirection), q=dot(oc,oc)-radius*radius, disc=b*b-q;
+        float shadow=(disc>0.&&-b-sqrt(disc)>0.)?.86:0.;
+        gl_FragColor=vec4(c.rgb*(1.-shadow),c.a);
+        #include <colorspace_fragment>
+      }`,
+    transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,toneMapped:false,
+  });
   ringMaterial.name='Pelagia / inclined dust ring';resourceMaterials.add(ringMaterial);
+  ringMaterial.userData.traceMaterial=new THREE.MeshBasicMaterial({map:ringMap,transparent:true,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+  resourceMaterials.add(ringMaterial.userData.traceMaterial);
   const planetaryRing=addMesh(ringGeometry,ringMaterial,root);
   planetaryRing.name='Pelagia / broken mineral rings';planetaryRing.position.copy(planetPosition);
-  const ringNormal=new THREE.Vector3(-.43,.62,.655).normalize();
   planetaryRing.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),ringNormal);
   planetaryRing.castShadow=false;planetaryRing.receiveShadow=false;planetaryRing.userData.excludeFromAO=true;
 
@@ -318,22 +403,29 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
       }
       void main() {
         vec3 surface = normalize(vSurface);
-        float t = time * .018;
+        float t = time * .05;
         vec3 p = surface * 7.5;
         vec3 flow = vec3(
           noise(p + vec3(t, 0., 0.)),
           noise(p + vec3(4.7, t, 2.1)),
           noise(p + vec3(1.3, 8.1, -t))
         ) - .5;
-        float cells = turbulence(p + flow * 2.2 + vec3(0., t, 0.));
-        float granules = noise(surface * 88. + flow * 1.8 + t) * .085;
-        float heat = smoothstep(.25, .78, cells + granules);
-        float filaments = pow(1. - abs(cells * 2. - 1.), 12.) * .13;
+        // Boiling convection cells, fine granulation and slowly drifting spots.
+        float cells = turbulence(p + flow * 2.6 + vec3(0., t, 0.));
+        float granules = noise(surface * 88. + flow * 2.4 + t * 2.3) * .11;
+        float heat = smoothstep(.22, .8, cells + granules);
+        float filaments = pow(1. - abs(cells * 2. - 1.), 12.) * .16;
+        float spotField = turbulence(surface * 2.3 + vec3(time * .004, 0., 0.));
+        float umbra = smoothstep(.66, .74, spotField), penumbra = smoothstep(.6, .66, spotField) - umbra;
+        float faculae = smoothstep(.55, .6, spotField) * (1. - smoothstep(.6, .66, spotField));
         vec3 cool = vec3(.32, .49, .005);
         vec3 hot = vec3(.87, 1., .12);
         vec3 color = mix(cool, hot, heat) + filaments * vec3(.55, .67, .08);
+        color *= 1. - umbra * .78 - penumbra * .36;
+        color += faculae * vec3(.32, .38, .05);
+        color *= 1. + .045 * sin(time * .7) + .02 * sin(time * 2.3 + cells * 6.);
         float facing = max(dot(normalize(vViewNormal), normalize(vViewDirection)), 0.);
-        float limb = .57 + .43 * pow(facing, .32);
+        float limb = .52 + .48 * pow(facing, .36);
         gl_FragColor = vec4(color * limb * 1.45, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -348,38 +440,95 @@ export function addSpaceEnvironment({ scene, root, animated, texture, addMesh, r
   star.castShadow = false;
   star.receiveShadow = false;
 
-  const coronaMap = texture(512, 512, ctx => {
-    const gradient = ctx.createRadialGradient(256, 256, 134, 256, 256, 256);
-    gradient.addColorStop(0, 'rgba(221,255,65,.15)');
-    gradient.addColorStop(.16, 'rgba(205,255,22,.095)');
-    gradient.addColorStop(.48, 'rgba(170,232,11,.024)');
-    gradient.addColorStop(1, 'rgba(150,222,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 512);
+  // Corona: rotating streamers, limb prominences and an occasional flare,
+  // drawn on a camera-facing quad around the star (no CPU billboarding).
+  const coronaMaterial = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = position.xy;
+      vec4 c = viewMatrix * modelMatrix * vec4(0., 0., 0., 1.);
+      // Behind the viewer the billboard would wrap across the screen; drop it.
+      gl_Position = c.z > -1. ? vec4(0., 0., 2., 1.) : projectionMatrix * (c + vec4(position.xy, 0., 0.)); }`,
+    fragmentShader: `uniform float time; varying vec2 vUv;
+      ${noiseGLSL}
+      void main() {
+        float R = 19.; vec2 q = vUv / R; float r = length(q), a = atan(q.y, q.x);
+        if (r < .985) discard;
+        float e = r - 1.;
+        float glow = .5 / (1. + e * 9.) * exp(-e * 1.3);
+        float spin = time * .01;
+        float streamers = pow(fbm(vec3(cos(a) * 2.2, sin(a) * 2.2, e * 1.1 - time * .03) + vec3(spin, 0., 0.)), 2.2);
+        float rays = streamers * exp(-e * 1.05) * 1.25;
+        // Prominence loops hug the limb and flicker as they evolve.
+        float loops = smoothstep(.62, .78, fbm(vec3(cos(a) * 6., sin(a) * 6., time * .05))) * exp(-e * 22.) * (1. - smoothstep(.0, .16, e));
+        // A flare every ~47 s: one sector flashes and a shell expands outward.
+        float cycle = mod(time, 47.), phase = cycle / 8.;
+        float sector = exp(-pow(mod(a - 1.1 + 3.14159, 6.28318) - 3.14159, 2.) * 6.);
+        float flare = (cycle < 8. ? (1. - phase) : 0.) * sector * exp(-e * 6.) * 1.6;
+        float shell = (cycle < 8. ? exp(-pow((e - phase * 1.6) * 7., 2.)) * (1. - phase) : 0.) * (.4 + .6 * sector) * .5;
+        vec3 color = vec3(.64, .9, .06) * glow + vec3(.78, 1., .2) * rays + vec3(1., .96, .55) * (loops * 1.4 + flare) + vec3(.8, 1., .35) * shell;
+        float fade = 1. - smoothstep(2.6, 3.4, r);
+        gl_FragColor = vec4(color * fade, 1.);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
-  const coronaMaterial = new THREE.SpriteMaterial({
-    map: coronaMap,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
+  coronaMaterial.name = 'Primary star corona';
   resourceMaterials.add(coronaMaterial);
-  const corona = new THREE.Sprite(coronaMaterial);
-  corona.name = 'Primary star corona';
-  corona.position.copy(star.position);
-  corona.scale.set(72, 72, 1);
-  root.add(corona);
+  const corona = addMesh(new THREE.PlaneGeometry(19 * 7, 19 * 7), coronaMaterial, root);
+  corona.name = 'Primary star corona'; corona.userData.noTrace = true;
+  corona.position.copy(star.position); corona.geometry.computeBoundingSphere();
+  corona.castShadow = false; corona.receiveShadow = false; corona.userData.excludeFromAO = true;
+
+  // Orbital motion. The station's orbit normal points close to the lime star,
+  // so the star holds its place in the prow while the rest of the sky wheels
+  // slowly around it, and Pelagia's surface slides beneath the cupola.
+  const orbitAxis = star.position.clone().normalize(), skyTurn = new THREE.Quaternion();
+  const ORBIT_RATE = .0085, PLANET_SPIN = .0055, CLOUD_SPIN = .0068;
+
+  // A Sentient tender coasts past the prow on a long, periodic pass.
+  const tender = new THREE.Group(); tender.name = 'SNT tender 02 / passing traffic';
+  const shipMat = (color, emissive = .3, metal = .3) => { const m = new THREE.MeshStandardMaterial({ color, roughness: .55, metalness: metal, emissive: color, emissiveIntensity: emissive }); resourceMaterials.add(m); return m; };
+  const hullMat = shipMat(0xe9e8dd), darkMat = shipMat(0x38434b, .18), panelMat = shipMat(0x1f3446, .25, .6), limeMat = shipMat(0xcfff04, .9, 0);
+  const part = (geometry, material, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geometry, material); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); tender.add(m); return m; };
+  part(new THREE.CylinderGeometry(1.1, 1.1, 6.5, 20), hullMat, 0, 0, 0, 0, 0, Math.PI / 2);
+  part(new THREE.SphereGeometry(1.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), hullMat, 3.25, 0, 0, 0, 0, -Math.PI / 2);
+  part(new THREE.CylinderGeometry(.75, 1.05, 1.3, 16), darkMat, -3.9, 0, 0, 0, 0, Math.PI / 2);
+  part(new THREE.CylinderGeometry(1.13, 1.13, .35, 20), limeMat, 1.6, 0, 0, 0, 0, Math.PI / 2);
+  for (const side of [-1, 1]) {
+    part(new THREE.BoxGeometry(.2, .2, 1.6), darkMat, -.6, 0, side * 1.9);
+    part(new THREE.BoxGeometry(2.6, .05, 4.4), panelMat, -.6, 0, side * 4.9);
+  }
+  part(new THREE.BoxGeometry(1.8, .9, .9), darkMat, -1.6, 1.15, 0);
+  const navLight = (color, x, y, z) => { const m = new THREE.MeshBasicMaterial({ color, toneMapped: false }); resourceMaterials.add(m); return part(new THREE.SphereGeometry(.13, 8, 6), m, x, y, z); };
+  const port = navLight(0xff3b2f, -.6, 0, -7.1), starboard = navLight(0x36ff6a, -.6, 0, 7.1), strobe = navLight(0xffffff, -1.6, 1.62, 0);
+  tender.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; o.userData.excludeFromAO = true; resourceGeometries?.add(o.geometry); } });
+  root.add(tender);
+  const passFrom = new THREE.Vector3(-150, 4, -96), passTo = new THREE.Vector3(150, 13, -84), PASS = 95, GAP = 70;
+  // The nose is local +X; point it along the pass.
+  const tenderHeading = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), passTo.clone().sub(passFrom).normalize());
+  const roll = new THREE.Quaternion(), xAxis = new THREE.Vector3(1, 0, 0);
 
   animated.push(time => {
-    stellarMaterial.uniforms.time.value = time;
-    star.rotation.y = time * .004;
+    stellarMaterial.uniforms.time.value = time; coronaMaterial.uniforms.time.value = time;
+    planetMaterial.uniforms.time.value = time; cloudMaterial.uniforms.time.value = time;
+    star.rotation.y = time * .012;
+    skyTurn.setFromAxisAngle(orbitAxis, time * ORBIT_RATE);
+    scene.backgroundRotation.setFromQuaternion(skyTurn);
+    planet.rotation.z = time * PLANET_SPIN; clouds.rotation.z = time * CLOUD_SPIN;
+    const cycle = time % (PASS + GAP), t = cycle / PASS;
+    tender.visible = t < 1;
+    if (tender.visible) {
+      tender.position.lerpVectors(passFrom, passTo, t);
+      tender.quaternion.copy(tenderHeading).multiply(roll.setFromAxisAngle(xAxis, Math.sin(time * .07) * .08));
+      strobe.visible = (time % 1.6) < .09;
+      port.visible = starboard.visible = (time % 3) > .25;
+    }
   });
   return {
     distantStars:15600, backgroundType:'CubeTexture', planetName:'Pelagia',
-    planetPosition:planetPosition.toArray(), planetRadius, planetDrawCalls:3,
-    planetTriangles:(planet.geometry.index.count+atmosphere.geometry.index.count+ringGeometry.index.count)/3,
-    planetTextureSize:[3072,1536], dynamicPlanetEffects:0,
+    planetPosition:planetPosition.toArray(), planetRadius, planetDrawCalls:5,
+    planetTriangles:(planet.geometry.index.count+atmosphere.geometry.index.count+clouds.geometry.index.count+halo.geometry.index.count+ringGeometry.index.count)/3,
+    planetTextureSize:[3072,1536], dynamicPlanetEffects:4, orbit:{skyRate:ORBIT_RATE,planetSpin:PLANET_SPIN,cloudSpin:CLOUD_SPIN,passingTraffic:1},
     planetDescription:'Obsidian and violet tectonic plates, copper mineral terraces, fluorescent fracture basins and stratified sulfur haze',
     planetFeatures:['warped tectonic plates','directionally shaded granular crust','layered copper shelves','branching faults','impact scar clusters','chartreuse and cyan fissures','mineral mist','tilted broken dust rings'],
     planetaryRings:{innerRadius:ringInner,outerRadius:ringOuter,normal:ringNormal.toArray(),textureSize:[2048,256]},

@@ -81,8 +81,8 @@ export async function createRaytracedView({ renderer, scene, camera, signal, onS
       } finally { generator._quad.material.dispose(); generator.dispose(); }
     }
     const objects = [];
-    // Custom-shader overlays (the deck guide light) have no physical material.
-    scene.traverseVisible(object => { if ((object.isMesh && !object.material?.isShaderMaterial) || object.isLight) objects.push(object); });
+    // Overlays with no physical equivalent (guide light, clouds, corona) opt out.
+    scene.traverseVisible(object => { if ((object.isMesh && !object.userData.noTrace) || object.isLight) objects.push(object); });
     for (let index = 0; index < objects.length; index++) {
       aborted();
       const object = objects[index];
